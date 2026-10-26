@@ -20,6 +20,7 @@ class Design:
     startboxes: Optional[str] = None       # map_startboxes.lua content (None = from symmetry)
     paint: Optional[dict] = None           # paint layers 0..1
     diffuse: Optional[Any] = None          # pre-rendered RGB texture (Wpx x Hpx x 3); skips render_rgb when set
+    water: Optional[dict] = None           # mapinfo.lua water override (surface_type, damage, colors, ...)
     extra_files: dict = field(default_factory=dict)
     features: list = field(default_factory=list)
     tree_block: Optional[np.ndarray] = None

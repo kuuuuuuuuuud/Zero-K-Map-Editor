@@ -164,14 +164,24 @@ class _Carver:
         return [k for k, _ in targets if k != "start"]
 
 
-def place_resources(hm, sym, starts, units, rng, log, mex_per_side=None):
+def place_resources(hm, sym, starts, units, rng, log, mex_per_side=None, max_slope_deg=30.0, waterlevel=None):
     """Symmetric metal spots (3 at each base, rest by Poisson sampling, richer towards the centre)
-    and geovents."""
+    and geovents.  ``max_slope_deg`` caps the slope under a spot; ``waterlevel`` (when given)
+    rejects spots closer than 5 elmos to the water line.  If fewer than 6 spots survive, a
+    fallback pass places the rest on the flattest remaining ground."""
     W, H = sym.W, sym.H
     sl = slope_deg(ndimage.gaussian_filter(hm, 2))
     if mex_per_side is None:
         mex_per_side = int(round(0.11 * units * units + 3))
     mexes = []
+
+    def ground_ok(x, z):
+        i, j = int(z / SQ), int(x / SQ)
+        if sl[i, j] > max_slope_deg:
+            return False
+        if waterlevel is not None and hm[i, j] < waterlevel + 5:
+            return False
+        return True
 
     def ok(x, z, mind=330, minmirror=500):
         if x < 160 or z < 160 or x > W - 160 or z > H - 160:
@@ -196,7 +206,7 @@ def place_resources(hm, sym, starts, units, rng, log, mex_per_side=None):
             r = rng.uniform(230, 330)
             x, z = sx + r * math.cos(a), sz + r * math.sin(a)
             x = min(max(x, 170), W - 170); z = min(max(z, 170), H - 170)
-            if ok(x, z, mind=200):
+            if ok(x, z, mind=200) and ground_ok(x, z):
                 add(x, z, 2.0)
                 break
     cand = 0
@@ -206,8 +216,7 @@ def place_resources(hm, sym, starts, units, rng, log, mex_per_side=None):
         x, z = rng.uniform(160, W - 160), rng.uniform(160, H - 160)
         if sym.side(x, z) >= 0:
             continue
-        i, j = int(z / SQ), int(x / SQ)
-        if sl[i, j] > 10 or hm[i, j] < 2:
+        if not ground_ok(x, z):
             continue
         if math.hypot(x - sx, z - sz) < 550:
             continue
@@ -216,6 +225,28 @@ def place_resources(hm, sym, starts, units, rng, log, mex_per_side=None):
         dc = abs(sym.side(x, z)) / (0.5 * side_r)       # closer to the centre = richer
         metal = round(float(np.clip(2.6 - 1.4 * dc + rng.uniform(-0.2, 0.2), 1.5, 3.0)), 1)
         add(x, z, metal)
+    if len(mexes) < 6:                               # flattest-remaining fallback
+        log(f"  warning: only {len(mexes)} metal spots placed; retrying on the flattest ground")
+        for idx in np.argsort(sl.ravel()):
+            if len(mexes) >= 6:
+                break
+            i, j = np.unravel_index(idx, sl.shape)
+            x, z = (j + 0.5) * SQ, (i + 0.5) * SQ
+            if not (160 < x < W - 160 and 160 < z < H - 160):
+                continue
+            if sl[i, j] > max_slope_deg:
+                continue
+            if sym.side(x, z) >= 0:
+                continue
+            if waterlevel is not None and hm[i, j] < waterlevel + 5:
+                continue
+            if math.hypot(x - sx, z - sz) < 550:
+                continue
+            if not ok(x, z):
+                continue
+            dc = abs(sym.side(x, z)) / (0.5 * side_r)
+            metal = round(float(np.clip(2.6 - 1.4 * dc + rng.uniform(-0.2, 0.2), 1.5, 3.0)), 1)
+            add(x, z, metal)
     log(f"  {len(mexes)} metal spots")
 
     geos = []                                         # 1 per side (2 from 16x16)

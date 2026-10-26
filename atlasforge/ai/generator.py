@@ -23,12 +23,15 @@ Environment variables (see ``.env.example``):
 * ``DEEPINFRA_IMAGE_MODEL``  model id, default ``stabilityai/sdxl-turbo``.
 * ``USE_STUB``               ``"1"`` -> deterministic offline synthetic images.
 * ``AI_SEED``                seed for the stub generator (default 1).
+* ``AI_NEGATIVE_PROMPT``     ``"1"`` -> send the hardcoded negative prompts to the API.
 """
 
 import base64
 import io
 import logging
 import os
+from datetime import datetime
+from pathlib import Path
 
 import numpy as np
 import requests
@@ -42,14 +45,39 @@ logger = logging.getLogger("atlasforge.ai")
 DEFAULT_MODEL = "stabilityai/sdxl-turbo"
 API_URL = "https://api.deepinfra.com/v1/openai/images/generations"
 
-HEIGHTMAP_PROMPT = (
-    "{prompt}, grayscale topographic heightmap, top-down orthographic view, "
-    "black is low elevation, white is high elevation, no text, no labels, no border"
+HEIGHTMAP_POSITIVE = (
+    "heightmap, terrain elevation, greyscale, orthographic top-down view, "
+    "flat even lighting, no shadows, no perspective, {prompt}, "
+    "clean ridges, readable basins"
 )
-TEXTURE_PROMPT = (
-    "{prompt}, top-down orthographic satellite terrain, natural colors, "
-    "real-time strategy game map, no text, no icons, no grid, no border"
+HEIGHTMAP_NEGATIVE = (
+    "color, 3d render, perspective, shadows, highlights, lighting, text, "
+    "watermark, signature, border, frame, depth of field, cinematic, atmospheric"
 )
+TEXTURE_POSITIVE = (
+    "seamless tileable texture, orthographic top-down view, flat even lighting, "
+    "no shadows, no perspective, {prompt}, game asset, 4k resolution"
+)
+TEXTURE_NEGATIVE = (
+    "shadow, highlight, reflection, perspective, depth of field, 3d render, text, "
+    "watermark, logo, border, frame, seam, horizon, directional lighting, cinematic, dramatic"
+)
+
+
+def _log_prompt(kind, positive, negative):
+    """Append the full positive/negative prompts to logs/cline_actions.log.
+
+    Prompt logging is a debug aid and must never break a build, so any
+    filesystem error is swallowed.
+    """
+    try:
+        log_path = Path(__file__).resolve().parents[2] / "logs" / "cline_actions.log"
+        stamp = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3]
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(f"{stamp}\tAI {kind} POSITIVE: {positive}\n")
+            f.write(f"{stamp}\tAI {kind} NEGATIVE: {negative}\n")
+    except OSError:
+        pass
 
 
 class DeepInfraError(RuntimeError):
@@ -82,18 +110,24 @@ class DeepInfraGenerator:
         self._log = log or (lambda msg: logger.info(msg))
         self.stub = os.environ.get("USE_STUB", "0") == "1"
         self.seed = int(os.environ.get("AI_SEED", "1"))
+        self.send_negative = os.environ.get("AI_NEGATIVE_PROMPT", "0") == "1"
         if self.stub:
             self._log(f"DeepInfraGenerator: STUB mode enabled (offline, seed={self.seed})")
 
     # ------------------------------------------------------------------ #
     # public API
     # ------------------------------------------------------------------ #
-    def generate_image(self, prompt, width=1024, height=1024):
-        """Return a single RGB image (``width`` x ``height``) for ``prompt``."""
+    def generate_image(self, prompt, width=1024, height=1024, negative=None):
+        """Return a single RGB image (``width`` x ``height``) for ``prompt``.
+
+        ``negative`` is an optional negative prompt.  It is only forwarded to
+        the API when ``AI_NEGATIVE_PROMPT=1`` (several image models, including
+        the default SDXL-turbo, ignore it); it is always logged for debugging.
+        """
         if self.stub:
             return self._stub_image(prompt, int(width), int(height))
         self._require_key()
-        return self._api_image(prompt, int(width), int(height))
+        return self._api_image(prompt, int(width), int(height), negative)
 
     def generate_terrain(
         self,
@@ -124,12 +158,15 @@ class DeepInfraGenerator:
             raise ValueError(f"map size must be even, got {sx}x{sz} (e.g. use 16x8)")
         nx, nz = sx * 64, sz * 64
 
-        hm_img = self.generate_image(
-            HEIGHTMAP_PROMPT.format(prompt=prompt), gen_width, gen_height
-        )
-        tex_img = self.generate_image(
-            TEXTURE_PROMPT.format(prompt=prompt), gen_width, gen_height
-        )
+        hm_pos = HEIGHTMAP_POSITIVE.format(prompt=prompt)
+        tex_pos = TEXTURE_POSITIVE.format(prompt=prompt)
+        _log_prompt("heightmap", hm_pos, HEIGHTMAP_NEGATIVE)
+        _log_prompt("texture", tex_pos, TEXTURE_NEGATIVE)
+        self._log(f"DeepInfra heightmap prompt: {hm_pos}")
+        self._log(f"DeepInfra texture prompt:  {tex_pos}")
+
+        hm_img = self.generate_image(hm_pos, gen_width, gen_height, negative=HEIGHTMAP_NEGATIVE)
+        tex_img = self.generate_image(tex_pos, gen_width, gen_height, negative=TEXTURE_NEGATIVE)
 
         hm = self._heightmap_from_image(
             hm_img, nz, nx, min_height, max_height, percentile_lo, percentile_hi
@@ -150,7 +187,7 @@ class DeepInfraGenerator:
                 "your DeepInfra key, or set USE_STUB=1 for offline testing."
             )
 
-    def _api_image(self, prompt, width, height):
+    def _api_image(self, prompt, width, height, negative=None):
         payload = {
             "model": self.model,
             "prompt": prompt,
@@ -158,6 +195,8 @@ class DeepInfraGenerator:
             "n": 1,
             "response_format": "b64_json",
         }
+        if negative and self.send_negative:
+            payload["negative_prompt"] = negative
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",

@@ -64,7 +64,7 @@ def _diffuse_texture(diffuse, Wpx, Hpx):
 def build_archive(name, hm, sym, starts, mexes, geos, biome, rng, outdir, desc, config=None, log=print,
                   preview=True, extra=None, tree_block=None, startboxes=None, extra_files=None, features=None,
                   random_trees=True, preview_marks=None, preview_start_colors=None, paint=None, workers=None,
-                  keep_clear=None, diffuse=None):
+                  keep_clear=None, diffuse=None, water=None):
     """Build <outdir>/<name>.sdz. Returns an info dict.
     config: ForgeConfig (author, badge); desc is used as given (call config.describe() before if wanted).
     paint: optional dict of 0..1 fields (heightmap resolution) for PAINT_LAYERS.
@@ -193,7 +193,7 @@ def build_archive(name, hm, sym, starts, mexes, geos, biome, rng, outdir, desc, 
         z.writestr("mapinfo.lua", mapinfo_lua(name, desc, cfg.author, hmin, hmax, smt_name, starts, biome, water_h,
                                               fname + ".smf", minimap_tex="minimap_ingame.dds" if badge else None,
                                               emission_tex=emis_name, tool=TOOL_NAME, sky_box=sky_name,
-                                              grass_shading=shading_name))
+                                              grass_shading=shading_name, water=water))
         if badge:
             # DDS is loaded vertically flipped (OpenGL convention), the SMF minimap is not: write upside down
             z.writestr("maps/minimap_ingame.dds", dds_bytes(np.ascontiguousarray(mini_clean[::-1]), "DXT1"))

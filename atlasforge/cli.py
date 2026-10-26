@@ -6,6 +6,7 @@
   atlasforge build volcano --set bomb_rate=1.2 --title "Ember Atoll" --install
   atlasforge procedural --title "Ashfall Ridge" --size 12 12 --biome volcanic --style plateaus --seed 7
   atlasforge ai --title "AI Canyon" --prompt "a long narrow canyon with two fortresses" --size 16 4
+  atlasforge ai plateau --title "Twin Plateaus" --prompt "temperate grassland" --size 16 4
   atlasforge config --author "MyName"
   atlasforge verify some_map.sdz                          is this map made with Atlas Map Forge?
   atlasforge find-zerok
@@ -44,7 +45,7 @@ def _cmd_procedural(a):
 
 
 def _cmd_ai(a):
-    from .ai.pipeline import generate
+    from .ai.pipeline import generate, generate_plateau
     cfg = C.load()
     if a.author:
         cfg.author = a.author
@@ -53,8 +54,19 @@ def _cmd_ai(a):
     except ValueError as ex:
         print(ex, file=sys.stderr)
         return 2
-    info = generate(a.title, a.prompt, tuple(a.size), a.seed, a.biome, a.out, cfg,
-                    version=a.version, preview=not a.no_preview, model=a.model)
+    if a.mode == "plateau":
+        info = generate_plateau(a.title, a.prompt, tuple(a.size), a.seed, a.biome, a.out, cfg,
+                                version=a.version, preview=not a.no_preview, model=a.model,
+                                surface_type=a.surface, ai_texture=not a.no_ai_texture,
+                                waterlevel=a.waterlevel)
+    else:
+        if not a.prompt:
+            print("ai custom mode requires --prompt (or use 'atlasforge ai plateau')", file=sys.stderr)
+            return 2
+        info = generate(a.title, a.prompt, tuple(a.size), a.seed, a.biome, a.out, cfg,
+                        version=a.version, preview=not a.no_preview, model=a.model,
+                        surface_type=a.surface, smooth=a.smooth, max_slope=a.max_slope,
+                        waterlevel=a.waterlevel)
     if a.install is not None:
         from .install import find_zerok, install
         target = a.install or (find_zerok() or [None])[0]
@@ -240,15 +252,28 @@ def main(argv=None):
                    help="install into Zero-K after building (folder optional, found automatically)")
     p.set_defaults(func=_cmd_procedural)
 
-    p = sub.add_parser("ai", help="build a map from a text prompt (DeepInfra AI)")
+    p = sub.add_parser("ai", help="build a map from a text prompt (DeepInfra AI) or a twin-plateau template")
+    p.add_argument("mode", nargs="?", choices=("custom", "plateau"), default="custom",
+                   help="'custom' (default) = prompt-driven map; 'plateau' = procedural 16x4 twin plateau "
+                        "with AI texture")
     p.add_argument("--title", required=True, help="map title; the name becomes 'Forge <title> v<version>'")
     p.add_argument("--version", dest="version", type=int, default=1)
-    p.add_argument("--prompt", required=True, help="text description of the map to generate")
+    p.add_argument("--prompt", default=None,
+                   help="custom: text description of the map to generate (required); "
+                        "plateau: texture prompt (optional)")
     p.add_argument("--size", nargs=2, type=int, default=[16, 4], metavar=("W", "H"),
                    help="map size in Spring units, even numbers 4..32 (default 16 4)")
     p.add_argument("--seed", type=int, default=1)
     p.add_argument("--biome", choices=sorted(BIOMES), default="temperate")
     p.add_argument("--model", default=None, help="DeepInfra image model (default: DEEPINFRA_IMAGE_MODEL)")
+    p.add_argument("--surface", choices=("none", "water", "lava", "void"), default="none",
+                   help="water surface: none (dry), water, lava (damaging), void (bottomless)")
+    p.add_argument("--smooth", type=int, default=3, help="gaussian smoothing sigma on the heightmap")
+    p.add_argument("--max-slope", type=float, default=30.0, help="max traversable slope in degrees")
+    p.add_argument("--waterlevel", type=float, default=0.0,
+                   help="water plane height for water/lava surfaces")
+    p.add_argument("--no-ai-texture", action="store_true",
+                   help="plateau mode only: use a solid biome texture instead of the DeepInfra image")
     p.add_argument("--out", default=".", help="output folder")
     p.add_argument("--author", help="author name for this map (default: the saved one)")
     p.add_argument("--no-preview", action="store_true")

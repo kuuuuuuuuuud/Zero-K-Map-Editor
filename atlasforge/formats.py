@@ -161,7 +161,7 @@ def lua_string(s):
 
 
 def mapinfo_lua(name, desc, author, hmin, hmax, smtname, starts, biome, water_h, smfname, minimap_tex=None,
-                emission_tex=None, tool="Atlas Map Forge", sky_box=None, grass_shading=None):
+                emission_tex=None, tool="Atlas Map Forge", sky_box=None, grass_shading=None, water=None):
     """mapinfo.lua. minimap_tex: separate in-game minimap without badge (unitsync and zero-k.info always
     read the minimap embedded in the SMF, which carries the badge)."""
     minimap_line = f'\n    minimaptex   = "{minimap_tex}",' if minimap_tex else ""
@@ -170,9 +170,24 @@ def mapinfo_lua(name, desc, author, hmin, hmax, smtname, starts, biome, water_h,
         emis_line += f'\n    grassShadingTex = "{grass_shading}",'
     sky_line = f'\n    skybox       = "{sky_box}",' if sky_box else ""
     sd = biome.get("sundir", (-0.4, 0.75, -0.5))
+    if water is None:                        # default: follow the biome (void maps have no water plane)
+        void_water = bool(biome.get("void"))
+        water_damage = biome.get("water_damage", 0)
+        wbase, wmin, wsurf = biome["water_base"], biome["water_min"], biome["water_surf"]
+        wplane = None if void_water else biome["water_min"]
+        wlevel = None
+    else:                                    # explicit surface override (ai pipeline surface_type)
+        void_water = bool(water.get("voidwater", biome.get("void", False)))
+        water_damage = float(water.get("damage", biome.get("water_damage", 0)))
+        wbase = water.get("base", biome["water_base"])
+        wmin = water.get("min", biome["water_min"])
+        wsurf = water.get("surf", biome["water_surf"])
+        wplane = water.get("plane")
+        wlevel = water.get("waterlevel")
     # a water plane (planecolor) also tints the lower half of the sky box: not on void maps, where the
     # space below the edge must show the sky (Recoil CubeMapFS / MapInfo hasWaterPlane)
-    plane_line = "" if biome.get("void") else f"    planecolor     = {lua_tuple(biome['water_min'])},"
+    plane_line = "" if wplane is None else f"    planecolor     = {lua_tuple(wplane)},"
+    water_level_line = "" if wlevel is None else f"\n  waterlevel     = {_lua_num(wlevel)},"
     void_type = ""
     if biome.get("void"):        # space below the water line: nothing can move there (typemap 255)
         void_type = """
@@ -215,8 +230,8 @@ local mapinfo = {{
   tidalstrength   = {int(b.get("tidal", 12))},
   maxmetal        = 3.0,
   extractorradius = 80.0,
-  voidwater       = {"true" if b.get("void") else "false"},
-  voidground      = false,
+  voidwater       = {"true" if void_water else "false"},
+  voidground      = false,{water_level_line}
   autoshowmetal   = false,
 
   smf = {{
@@ -269,13 +284,13 @@ local mapinfo = {{
   }},
 
   water = {{
-    damage         = {b.get("water_damage", 0)},
+    damage         = {water_damage},
     repeatx        = 0.0,
     repeaty        = 0.0,
     absorb         = {{0.004, 0.004, 0.002}},
-    basecolor      = {lua_tuple(b["water_base"])},
-    mincolor       = {lua_tuple(b["water_min"])},
-    surfacecolor   = {lua_tuple(b["water_surf"])},
+    basecolor      = {lua_tuple(wbase)},
+    mincolor       = {lua_tuple(wmin)},
+    surfacecolor   = {lua_tuple(wsurf)},
     surfacealpha   = 0.35,
     specularcolor  = {{0.8, 0.8, 0.8}},
 {plane_line}

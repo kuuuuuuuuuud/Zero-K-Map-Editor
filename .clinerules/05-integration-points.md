@@ -30,3 +30,51 @@ Where the DeepInfra generator plugs into the Atlas build pipeline (Phase 3+).
   `Design.diffuse`.
 - `Design.diffuse` field: `atlasforge/design.py`.
 - CLI: `atlasforge ai --title "..." --prompt "..." --size 16 4`.
+
+## Prompt templates (AI generation)
+
+Hardcoded in `atlasforge/ai/generator.py` (positive + negative; `{prompt}` is the
+user's description):
+
+- Heightmap positive: `heightmap, terrain elevation, greyscale, orthographic
+  top-down view, flat even lighting, no shadows, no perspective, {prompt}, clean
+  ridges, readable basins`
+- Heightmap negative: `color, 3d render, perspective, shadows, highlights,
+  lighting, text, watermark, signature, border, frame, depth of field, cinematic,
+  atmospheric`
+- Texture positive: `seamless tileable texture, orthographic top-down view, flat
+  even lighting, no shadows, no perspective, {prompt}, game asset, 4k resolution`
+- Texture negative: `shadow, highlight, reflection, perspective, depth of field,
+  3d render, text, watermark, logo, border, frame, seam, horizon, directional
+  lighting, cinematic, dramatic`
+
+Both prompts are logged to `logs/cline_actions.log` on every `generate_terrain`
+call. The negative prompt is only forwarded to the API when `AI_NEGATIVE_PROMPT=1`.
+
+## Surface types
+
+`atlasforge ai --surface {none,water,lava,void}` (default `none`) drives the
+mapinfo.lua water table (see `atlasforge/ai/pipeline.py::_surface`):
+
+- `none`  → `voidwater = true`, `waterlevel = -1000`, `water.damage = 0` (dry map).
+- `water` → `voidwater = false`, `waterlevel = 0` (or `--waterlevel`), damage 0,
+  standard blue water colours.
+- `lava`  → `voidwater = true`, `waterlevel = 0`, `water.damage = 100.0`,
+  orange/red `planeColor` + `surfaceColor`.
+- `void`  → `voidwater = true`, `waterlevel = -1000`, plus a
+  `LuaRules/Gadgets/void_death.lua` gadget that destroys units below `VOID_Y = -60`.
+
+## Playability pass
+
+- `atlasforge/ai/postprocess.py`: `gaussian_smooth`, `slope_limit`,
+  `check_traversability` (west→east A* for tanks).
+- Applied in `atlasforge/ai/pipeline.py::design` after `generate_terrain` and
+  before `forge.build`; `minHeight`/`maxHeight` therefore come from the
+  post-processed heightmap.
+- CLI: `--smooth` (default 3), `--max-slope` (default 30).
+
+Note: `--max-slope` still caps metal-spot placement, but the terrain itself is
+clamped to 22.0 geometric degrees (`TANK_SLOPE * 1.5 - 0.5`, ≈14.7 ZK movedef),
+because the ZK tank limit is 18 movedef (27 geometric) and 30 geometric degrees
+is not tank-climbable. `slope_limit` constrains all 8 neighbours so `move_slope`
+stays strictly below 15 with margin.
