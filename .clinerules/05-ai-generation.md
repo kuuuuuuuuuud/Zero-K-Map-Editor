@@ -10,6 +10,8 @@ convert them into the arrays Atlas expects, and build a `.sdz` map.
 - `atlasforge/ai/generator.py` — `DeepInfraGenerator` class with:
   - `generate_image(prompt, size, ...) -> PIL.Image` (texture art).
   - `generate_terrain(prompt, size) -> (heightmap_elmos: np.ndarray, texture: PIL.Image)`.
+- `atlasforge/ai/pipeline.py` — `ai_custom` mode: prompt -> Design (heightmap + diffuse)
+  -> `forge.build`, with start/mex discs flattened.
 
 ## API
 
@@ -25,11 +27,15 @@ convert them into the arrays Atlas expects, and build a `.sdz` map.
   (e.g. seeded noise / gradient) so the full pipeline runs end-to-end without network.
 - Stub must produce output with the same shape/type contract as the real generator.
 
-## Map-size constraint
+## Map-size constraint (even dimensions only)
 
 - Heightmap is `(nz+1, nx+1)` where `nx = size_x * 64`, `nz = size_y * 64`.
-- `archive.build_archive` requires `nx % 128 == 0` → **size must be EVEN**.
-- The AI mode must round up or reject odd sizes before building.
+- `archive.build_archive` requires `nx % 128 == 0` → **size must be EVEN**
+  (hard requirement: `atlasforge/archive.py:63-64`).
+- The AI generator rejects odd sizes at `atlasforge/ai/generator.py:123-124`; the
+  procedural CLI enforces the same at `atlasforge/procedural.py:252`.
+- **Standard test size is `16x4`** (width x height, 4:1 corridor). All Phase 3/4/5
+  tests use `16x4` — never 15x5.
 
 ## Texture → SMT injection point
 

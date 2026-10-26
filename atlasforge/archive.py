@@ -48,14 +48,31 @@ def _pool(n, job):
     return mp.get_context(method).Pool(n, initializer=_init_worker, initargs=(job,))
 
 
+def _diffuse_texture(diffuse, Wpx, Hpx):
+    """Coerce a supplied diffuse texture into the uint8 RGB texel grid (Hpx, Wpx, 3)."""
+    arr = np.asarray(diffuse.convert("RGB")) if hasattr(diffuse, "convert") else np.asarray(diffuse)
+    if arr.ndim == 2:                                   # single channel -> RGB
+        arr = np.stack([arr, arr, arr], axis=-1)
+    arr = arr[..., :3]
+    if arr.dtype != np.uint8:
+        arr = np.clip(arr * 255 if np.issubdtype(arr.dtype, np.floating) else arr, 0, 255).astype(np.uint8)
+    if arr.shape[0] != Hpx or arr.shape[1] != Wpx:      # wrong size -> resize to the texel grid
+        arr = np.asarray(Image.fromarray(arr).resize((Wpx, Hpx), Image.LANCZOS))
+    return np.ascontiguousarray(arr)
+
+
 def build_archive(name, hm, sym, starts, mexes, geos, biome, rng, outdir, desc, config=None, log=print,
                   preview=True, extra=None, tree_block=None, startboxes=None, extra_files=None, features=None,
-                  random_trees=True, preview_marks=None, preview_start_colors=None, paint=None, workers=None, keep_clear=None):
+                  random_trees=True, preview_marks=None, preview_start_colors=None, paint=None, workers=None,
+                  keep_clear=None, diffuse=None):
     """Build <outdir>/<name>.sdz. Returns an info dict.
     config: ForgeConfig (author, badge); desc is used as given (call config.describe() before if wanted).
     paint: optional dict of 0..1 fields (heightmap resolution) for PAINT_LAYERS.
     extra_files: {archive path: str|bytes} e.g. map gadgets and their config.
-    keep_clear: bool grid without random trees (e.g. carved ramps)."""
+    keep_clear: bool grid without random trees (e.g. carved ramps).
+    diffuse: optional pre-rendered texture (PIL RGB image or numpy array, Hpx x Wpx x 3). When set, the
+             procedural texture renderer (render_rgb) is skipped and this image is sliced into SMT tiles
+             and used for the minimap."""
     cfg = config or ForgeConfig()
     nz, nx = hm.shape[0] - 1, hm.shape[1] - 1
     if not np.isfinite(hm).all():
@@ -86,43 +103,56 @@ def build_archive(name, hm, sym, starts, mexes, geos, biome, rng, outdir, desc, 
 
     Wpx, Hpx = nx * TEX_PER_SQ, nz * TEX_PER_SQ
     TF = build_texture_fields(hmq)
-    has_lava = paint is not None and np.max(paint.get("lava", 0)) > 0
-    if paint:
-        z0 = np.zeros(hmq.shape, np.float32)
-        TF["paint"] = np.dstack([np.clip(paint.get(k, z0), 0, 1).astype(np.float32) for k in PAINT_LAYERS])
-        if has_lava:
-            TF["crack"] = crack_field(hmq.shape[0], np.random.default_rng(zlib.crc32(name.encode()) & 0xFFFF))
-    NB = NoiseBank(rng)
-    decals = [(m["x"], m["z"], "mex") for m in mexes] + [(g[0], g[1], "geo") for g in geos]
     os.makedirs(outdir, exist_ok=True)
     fname = name.replace(" ", "_")
     smt_name = fname + ".smt"
     smt_path = os.path.join(outdir, smt_name + ".tmp")
     ntiles = (Wpx // TILE) * (Hpx // TILE)
-    mini_rows, emis_rows = [], []
-    job = (TF, Wpx, biome, water_h, NB, decals, Hpx)
-    starts_ = list(range(0, Hpx, STRIP))
-    nproc = min(len(starts_), os.cpu_count() or 1, workers or 4)
-    pool = _pool(nproc, job)
-    if pool is None:
-        _init_worker(job)
-    it = pool.imap(_render_strip, starts_) if pool else map(_render_strip, starts_)
-    try:
+    emis_rows = []
+    if diffuse is not None:                                # AI-supplied texture: skip the procedural renderer
+        rgb = _diffuse_texture(diffuse, Wpx, Hpx)
         with open(smt_path, "wb") as f:
             f.write(smt_header(ntiles))
-            for r0, (rgb, tiles, em) in zip(starts_, it):
-                r1 = min(Hpx, r0 + STRIP)
-                f.write(tiles)
-                if em is not None:
-                    emis_rows.append(em)
-                if preview and r0 == (Hpx // 2 // STRIP) * STRIP:
-                    Image.fromarray(rgb[:, Wpx // 2 - 512:Wpx // 2 + 512]).save(os.path.join(outdir, fname + "_detail.png"))
-                mini_rows.append(np.asarray(Image.fromarray(rgb).resize((1024, max(1, (r1 - r0) * 1024 // Hpx)), Image.BOX)))
-                log(f"  texture {r1}/{Hpx}")
-    finally:
-        if pool:
-            pool.close(); pool.join()
-    mini_clean = np.asarray(Image.fromarray(np.concatenate(mini_rows, 0)).resize((1024, 1024), Image.LANCZOS))
+            f.write(tiles_from_strip(rgb).tobytes())
+        mini_clean = np.asarray(Image.fromarray(rgb).resize((1024, 1024), Image.LANCZOS))
+        if preview:
+            Image.fromarray(rgb[:, Wpx // 2 - 512:Wpx // 2 + 512]).save(
+                os.path.join(outdir, fname + "_detail.png"))
+        log(f"  texture {Hpx}/{Hpx} (AI diffuse)")
+        has_lava = False
+    else:
+        has_lava = paint is not None and np.max(paint.get("lava", 0)) > 0
+        if paint:
+            z0 = np.zeros(hmq.shape, np.float32)
+            TF["paint"] = np.dstack([np.clip(paint.get(k, z0), 0, 1).astype(np.float32) for k in PAINT_LAYERS])
+            if has_lava:
+                TF["crack"] = crack_field(hmq.shape[0], np.random.default_rng(zlib.crc32(name.encode()) & 0xFFFF))
+        NB = NoiseBank(rng)
+        decals = [(m["x"], m["z"], "mex") for m in mexes] + [(g[0], g[1], "geo") for g in geos]
+        mini_rows = []
+        job = (TF, Wpx, biome, water_h, NB, decals, Hpx)
+        starts_ = list(range(0, Hpx, STRIP))
+        nproc = min(len(starts_), os.cpu_count() or 1, workers or 4)
+        pool = _pool(nproc, job)
+        if pool is None:
+            _init_worker(job)
+        it = pool.imap(_render_strip, starts_) if pool else map(_render_strip, starts_)
+        try:
+            with open(smt_path, "wb") as f:
+                f.write(smt_header(ntiles))
+                for r0, (rgb, tiles, em) in zip(starts_, it):
+                    r1 = min(Hpx, r0 + STRIP)
+                    f.write(tiles)
+                    if em is not None:
+                        emis_rows.append(em)
+                    if preview and r0 == (Hpx // 2 // STRIP) * STRIP:
+                        Image.fromarray(rgb[:, Wpx // 2 - 512:Wpx // 2 + 512]).save(os.path.join(outdir, fname + "_detail.png"))
+                    mini_rows.append(np.asarray(Image.fromarray(rgb).resize((1024, max(1, (r1 - r0) * 1024 // Hpx)), Image.BOX)))
+                    log(f"  texture {r1}/{Hpx}")
+        finally:
+            if pool:
+                pool.close(); pool.join()
+        mini_clean = np.asarray(Image.fromarray(np.concatenate(mini_rows, 0)).resize((1024, 1024), Image.LANCZOS))
     badge = cfg.badge if cfg.badge != "none" else None
     mini_img = draw_badge(mini_clean, badge) if badge else mini_clean
     minimap = minimap_dxt(mini_img)

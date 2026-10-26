@@ -229,5 +229,6 @@ def build(design, outdir=".", config=None, title=None, version=1, name=None, log
                          extra=dict(template=design.template, seed=design.seed),
                          tree_block=design.tree_block, startboxes=design.startboxes, extra_files=design.extra_files,
                          features=design.features, random_trees=design.random_trees, paint=paint,
+                         diffuse=design.diffuse,
                          preview_marks=design.marks, preview_start_colors=design.start_colors,
                          keep_clear=design.keep_clear)

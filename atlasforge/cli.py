@@ -5,6 +5,7 @@
   atlasforge preview chokepoint --set gates=4 --seed 3   quick preview image + check report
   atlasforge build volcano --set bomb_rate=1.2 --title "Ember Atoll" --install
   atlasforge procedural --title "Ashfall Ridge" --size 12 12 --biome volcanic --style plateaus --seed 7
+  atlasforge ai --title "AI Canyon" --prompt "a long narrow canyon with two fortresses" --size 16 4
   atlasforge config --author "MyName"
   atlasforge verify some_map.sdz                          is this map made with Atlas Map Forge?
   atlasforge find-zerok
@@ -30,6 +31,30 @@ def _cmd_procedural(a):
         return 2
     info = generate(a.title, tuple(a.size), a.seed, a.biome, a.style, a.layout, a.relief, a.out, cfg,
                     version=a.version, mex_per_side=a.mex, preview=not a.no_preview)
+    if a.install is not None:
+        from .install import find_zerok, install
+        target = a.install or (find_zerok() or [None])[0]
+        if not target:
+            print("Zero-K folder not found, use --install <folder>", file=sys.stderr)
+            return 2
+        install(info["path"], target)
+    print(json.dumps(info, indent=1))
+    print("\n" + C.SUPPORT_TEXT)
+    return 0
+
+
+def _cmd_ai(a):
+    from .ai.pipeline import generate
+    cfg = C.load()
+    if a.author:
+        cfg.author = a.author
+    try:
+        cfg.validate().require_author()
+    except ValueError as ex:
+        print(ex, file=sys.stderr)
+        return 2
+    info = generate(a.title, a.prompt, tuple(a.size), a.seed, a.biome, a.out, cfg,
+                    version=a.version, preview=not a.no_preview, model=a.model)
     if a.install is not None:
         from .install import find_zerok, install
         target = a.install or (find_zerok() or [None])[0]
@@ -214,6 +239,22 @@ def main(argv=None):
     p.add_argument("--install", nargs="?", const="", default=None, metavar="ZEROK_DIR",
                    help="install into Zero-K after building (folder optional, found automatically)")
     p.set_defaults(func=_cmd_procedural)
+
+    p = sub.add_parser("ai", help="build a map from a text prompt (DeepInfra AI)")
+    p.add_argument("--title", required=True, help="map title; the name becomes 'Forge <title> v<version>'")
+    p.add_argument("--version", dest="version", type=int, default=1)
+    p.add_argument("--prompt", required=True, help="text description of the map to generate")
+    p.add_argument("--size", nargs=2, type=int, default=[16, 4], metavar=("W", "H"),
+                   help="map size in Spring units, even numbers 4..32 (default 16 4)")
+    p.add_argument("--seed", type=int, default=1)
+    p.add_argument("--biome", choices=sorted(BIOMES), default="temperate")
+    p.add_argument("--model", default=None, help="DeepInfra image model (default: DEEPINFRA_IMAGE_MODEL)")
+    p.add_argument("--out", default=".", help="output folder")
+    p.add_argument("--author", help="author name for this map (default: the saved one)")
+    p.add_argument("--no-preview", action="store_true")
+    p.add_argument("--install", nargs="?", const="", default=None, metavar="ZEROK_DIR",
+                   help="install into Zero-K after building (folder optional, found automatically)")
+    p.set_defaults(func=_cmd_ai)
 
     p = sub.add_parser("config", help="show or set your author name")
     p.add_argument("--author", help="your name, shown as the author of every map you build")
