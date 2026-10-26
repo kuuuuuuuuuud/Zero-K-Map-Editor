@@ -1,0 +1,21 @@
+{
+  "id": "lake_district",
+  "title": "Lake District",
+  "base": "skirmish",
+  "mode": "competitive",
+  "concept": "Several lake basins within a connected mainland, with reserved dry central routes and an outer land belt.",
+  "difference_from_base": "A land map with multiple lake decisions and amphibious shortcuts; not an island map or one river crossing.",
+  "intended_players": "1v1 or two teams up to 4v4.",
+  "routes": "Dry central axes and outer mainland belt guarantee land circulation; existing procedural ramp carving connects opening bases and resource sites.",
+  "economy": "Automatic mirrored land economy, three fixed opening spots per side, general mex and geo controls.",
+  "visual_review": true,
+  "in_game_tested": false,
+  "known_weaknesses": [
+    "No live Zero-K playtest.",
+    "Lakes can merge under large or crowded settings.",
+    "No guaranteed naval fleet network: this is a land profile."
+  ],
+  "core_wishes": [
+    "Requires the unchanged _wildlands.py helper from TPL-highlands-1."
+  ]
+}

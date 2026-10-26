@@ -1,0 +1,20 @@
+{
+  "id": "open_dunes",
+  "title": "Open Dunes",
+  "base": "skirmish",
+  "mode": "competitive",
+  "concept": "Broad low wind dunes with open basins and scattered rocky cover.",
+  "difference_from_base": "A low-amplitude wind field with interrupted crests; unlike Dune Sea, its default terrain favours open manoeuvring rather than tall dune barriers.",
+  "intended_players": "1v1 or two teams up to 4v4.",
+  "routes": "Broad valleys and basins, with existing procedural ramp carving to ensure tank access.",
+  "economy": "Automatic mirrored economy with three protected opening spots per side; general mex/geo controls supply adjustments.",
+  "visual_review": true,
+  "in_game_tested": false,
+  "known_weaknesses": [
+    "No live Zero-K playtest.",
+    "Advanced short spacing combined with high relief can create steep terrain."
+  ],
+  "core_wishes": [
+    "Uses the unchanged _wildlands.py helper from the delivered TPL-highlands-1 ticket."
+  ]
+}

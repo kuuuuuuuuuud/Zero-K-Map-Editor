@@ -1,0 +1,18 @@
+{
+  "id": "atoll",
+  "title": "Atoll",
+  "base": "archipelago",
+  "mode": "naval",
+  "concept": "Two opposing island arcs around a lagoon, linked to the outer ocean through deep northern and southern entrances.",
+  "difference_from_base": "A ring defines distinct inner and outer fleet routes. The lagoon and its entrances replace scattered expansion islands.",
+  "intended_players": "1v1 or two teams sharing a widened home arc on each side.",
+  "routes": "Ships contest the lagoon or use the outer ocean. Two protected deep entrances connect both spaces. Amphibians and hovers cross the gentle beaches; dry land never has to join the enemy base. Dedicated outer bypasses keep the island arcs clear of the map edge; their banks use a fixed 24-degree slope.",
+  "economy": "Three safe opening spots on each home arc, mirrored land and underwater expansions and optional geothermal vents. Seabed spots must belong to the same fleet network as the ports.",
+  "visual_review": true,
+  "in_game_tested": false,
+  "known_weaknesses": [
+    "Advanced radius, ring width and beach combinations may merge arcs or leave little expansion land.",
+    "No live Zero-K playtest yet."
+  ],
+  "core_wishes": []
+}

@@ -1,0 +1,21 @@
+{
+  "id": "fjord_coast",
+  "title": "Fjord Coast",
+  "base": "open_sea",
+  "mode": "naval",
+  "concept": "Deep inlets in mirrored mainlands with a protected home headland, bay mouths and a shared fleet front.",
+  "difference_from_base": "Mainland-indenting fjords and sheltered inlet fronts rather than offshore island obstacles.",
+  "intended_players": "1v1 or two teams up to 4v4, west versus east.",
+  "routes": "Explicit ports, common fleet front, ship access to each inlet, and amphibious access from home bases.",
+  "economy": "Shared naval distribution with fixed opening spots, seabed expansions and general mex/geo controls.",
+  "visual_review": true,
+  "in_game_tested": false,
+  "known_weaknesses": [
+    "No live Zero-K playtest.",
+    "Closely spaced inlets can share a mouth.",
+    "Advanced very deep mainland or narrow inlets can fail naval gameplay validation."
+  ],
+  "core_wishes": [
+    "Requires the _naval.islands / finish helpers delivered in TPL-naval-fix-1."
+  ]
+}

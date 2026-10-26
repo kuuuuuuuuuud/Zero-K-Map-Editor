@@ -1,0 +1,19 @@
+{
+  "id": "three_lanes",
+  "title": "Three Lanes",
+  "base": "chokepoint",
+  "mode": "competitive",
+  "concept": "Three long parallel battle corridors with shared rear areas and lateral crossings.",
+  "difference_from_base": "Two longitudinal ridges divide entire fronts; this is not a central wall with three gates.",
+  "intended_players": "1v1 or two teams sharing one rear start box per side.",
+  "routes": "All three lanes independently support tanks. Openings near each side connect the lanes; an optional central crossing adds a contested switch point. Spiders may cross ridge tops.",
+  "economy": "Three protected opening spots, mirrored expansion groups in every lane, richer forward fields and one optional geothermal vent per side.",
+  "visual_review": true,
+  "in_game_tested": false,
+  "known_weaknesses": [
+    "Ridges intentionally allow spider traversal; they are not absolute barriers.",
+    "Parameter extremes in advanced mode may merge crossings or reduce lane separation.",
+    "No live Zero-K playtest yet."
+  ],
+  "core_wishes": []
+}

@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atlas Map Forge</title>
+<link rel="icon" href="favicon.png">
+<link rel="stylesheet" href="app.css">
+<script>window.FORGE_TOKEN = "__FORGE_TOKEN__";</script>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <span class="mark" aria-hidden="true"></span>
+    <span class="word">ATLAS MAP <b>FORGE</b></span>
+    <span class="ver" id="ver"></span>
+    <span class="adv-badge hidden" id="adv-badge" title="Advanced mode: safe limits are off">ADVANCED</span>
+  </div>
+  <div class="top-right">
+    <button class="kofi" id="btn-kofi" title="Support the development on Ko-fi">
+      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M4 6h12a1 1 0 0 1 1 1v1h1.5a3.5 3.5 0 0 1 0 7H16.6A6 6 0 0 1 11 19H9a6 6 0 0 1-6-6V7a1 1 0 0 1 1-1Zm13 4v3h1.5a1.5 1.5 0 0 0 0-3H17Zm-7.6 1.1c-.9-.9-2.4-.3-2.4 1 0 1.3 1.9 2.5 3 3.3 1.1-.8 3-2 3-3.3 0-1.3-1.5-1.9-2.4-1l-.6.6-.6-.6Z"/></svg>
+      Support on Ko-fi
+    </button>
+    <span class="who" id="who"></span>
+    <button class="ghost" id="btn-settings" title="Settings">Settings</button>
+  </div>
+</header>
+
+<main class="layout">
+  <!-- left: templates and settings -->
+  <aside class="side left">
+    <section class="block">
+      <h2>Template <span class="count" id="tpl-count"></span></h2>
+      <button class="current" id="current-tpl" title="Browse all templates (T)">
+        <img id="cur-thumb" alt="">
+        <span class="cur-text"><b id="cur-title"></b><span id="cur-meta"></span><span class="badges" id="cur-badges"></span></span>
+        <span class="cur-change">Change</span>
+      </button>
+    </section>
+    <section class="block grow">
+      <h2 id="tpl-title">Settings</h2>
+      <p class="tpl-desc" id="tpl-desc"></p>
+      <div class="note warn hidden" id="adv-note">Advanced mode: the safe limits are off. Orange values are beyond them and may give broken or unplayable maps.</div>
+      <div id="params"></div>
+      <div class="field seed-row">
+        <label for="seed">Seed <span class="hint">same seed, same map</span></label>
+        <div class="seed">
+          <input type="number" id="seed" min="1" max="999999" value="7">
+          <button class="ghost icon" id="btn-dice" title="New random seed (R)">
+            <svg viewBox="0 0 24 24" width="18" height="18"><rect x="3.5" y="3.5" width="17" height="17" rx="3.5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="8.5" cy="8.5" r="1.6" fill="currentColor"/><circle cx="15.5" cy="15.5" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="15.5" cy="8.5" r="1.6" fill="currentColor"/><circle cx="8.5" cy="15.5" r="1.6" fill="currentColor"/></svg>
+            Roll
+          </button>
+        </div>
+      </div>
+    </section>
+    <div class="side-foot">
+      <label class="switch small"><input type="checkbox" id="auto" checked><span></span>Update preview automatically</label>
+      <button class="primary wide" id="btn-preview">Preview</button>
+    </div>
+  </aside>
+
+  <!-- centre: the map -->
+  <section class="stage" id="stage">
+    <canvas id="map"></canvas>
+    <div class="toolbar" id="toolbar">
+      <div class="tgroup" id="layers">
+        <button data-layer="mexes" class="on" title="Metal spots (M)">Metal</button>
+        <button data-layer="geos" class="on" title="Geothermal vents">Geo</button>
+        <button data-layer="starts" class="on" title="Start points (S)">Starts</button>
+        <button data-layer="boxes" class="on" title="Start boxes (B)">Start boxes</button>
+        <button data-layer="gates" class="on" title="Chokes the check report talks about">Chokes</button>
+        <button data-layer="features" class="on" title="Rocks, crystals and wrecks (reclaimable metal)">Features</button>
+        <button data-layer="hazard" class="on" title="Ground that damages units (red) and lava bomb zones (amber)">Danger</button>
+        <button data-layer="grid" title="Grid in map units (G)">Grid</button>
+      </div>
+      <div class="tgroup routes" id="routes">
+        <span class="tlabel">Where can it go?</span>
+        <button data-route="" class="on">Off</button>
+        <button data-route="tanks">Tanks</button>
+        <button data-route="bots">Bots</button>
+        <button data-route="spiders">Spiders</button>
+        <button data-route="amphibians">Amphibians</button>
+        <button data-route="hovers">Hovers</button>
+        <button data-route="ships" class="hidden" id="route-ships">Ships</button>
+      </div>
+      <div class="tgroup" id="edit-tools">
+        <button id="ed-toggle" title="Edit metal spots, geovents and start points (E)">Edit</button>
+        <span class="ed-only hidden" id="ed-extra">
+          <button data-tool="move" class="on" title="Move: drag a spot (V)">Move</button>
+          <button data-tool="mex" title="Add a metal spot: click (1)">Metal +</button>
+          <button data-tool="geo" title="Add a geovent: click (2)">Geo +</button>
+          <button data-tool="del" title="Delete: click a spot (X)">Delete</button>
+          <input type="number" id="ed-metal" min="0.1" max="9" step="0.1" value="2" title="Metal of the selected or the next new spot">
+          <label class="switch small" title="Edit all mirror images / rotations together"><input type="checkbox" id="ed-sym" checked><span></span>Symmetry</label>
+          <button id="ed-undo" title="Undo (Ctrl+Z)">Undo</button>
+          <button id="ed-redo" title="Redo (Ctrl+Y)">Redo</button>
+          <span class="ed-count" id="ed-count"></span>
+        </span>
+        <button id="ed-save" title="Save template, settings, seed and edits as a project file">Save project</button>
+        <button id="ed-open" title="Open a project file">Open project</button>
+        <input type="file" id="ed-file" accept=".json,.forge.json" class="hidden">
+      </div>
+      <div class="legend" id="legend"></div>
+    </div>
+    <div class="zoom">
+      <button id="z-in" title="Zoom in (+)">+</button>
+      <button id="z-out" title="Zoom out (-)">&minus;</button>
+      <button id="z-fit" title="Fit map (F)">Fit</button>
+    </div>
+    <div class="readout" id="readout">Scroll to zoom, drag to move</div>
+    <div class="veil" id="veil"><div class="spinner"></div><span id="veil-text">Forging preview</span></div>
+    <div class="empty" id="empty">Pick a template to start.</div>
+  </section>
+
+  <!-- right: check and build -->
+  <aside class="side right">
+    <section class="block">
+      <h2>Check <span class="badge" id="check-badge"></span></h2>
+      <ul class="report" id="report"></ul>
+    </section>
+    <section class="block">
+      <h2>Map</h2>
+      <dl class="facts" id="facts"></dl>
+    </section>
+    <section class="block build grow">
+      <h2>Build</h2>
+      <div class="note warn hidden" id="author-note">Set your author name to build maps. <a href="#" id="fix-author">Set your name</a></div>
+      <div class="field">
+        <label for="title">Map title</label>
+        <input type="text" id="title" maxlength="48" spellcheck="false">
+      </div>
+      <div class="field row2">
+        <div>
+          <label for="version">Version</label>
+          <input type="number" id="version" min="1" max="999" value="1">
+        </div>
+        <div class="namebox">
+          <label>Map name</label>
+          <div class="mapname" id="mapname"></div>
+        </div>
+      </div>
+      <div class="note hidden" id="version-note"></div>
+      <label class="switch small"><input type="checkbox" id="install" checked><span></span>Install into Zero-K</label>
+      <button class="forge wide" id="btn-build" disabled>Build map</button>
+      <div class="progress hidden" id="progress">
+        <div class="bar"><i id="bar"></i></div>
+        <div class="phase"><span id="phase"></span><span id="elapsed"></span></div>
+      </div>
+      <div class="result hidden" id="result"></div>
+      <details class="log hidden" id="logbox"><summary>Build log</summary><pre id="log"></pre></details>
+    </section>
+  </aside>
+</main>
+
+<div class="picker hidden" id="picker" role="dialog" aria-modal="true" aria-labelledby="picker-title">
+  <div class="picker-card">
+    <div class="picker-head">
+      <h2 id="picker-title">Choose a template</h2>
+      <input id="picker-search" type="search" placeholder="Search templates" spellcheck="false" autocomplete="off">
+      <button class="ghost" id="picker-close" title="Close (Esc)">Close</button>
+    </div>
+    <div class="picker-filters">
+      <div class="chips" id="flt-mode"></div>
+      <span class="flt-sep"></span>
+      <div class="chips" id="flt-tags"></div>
+      <span class="picker-n" id="picker-n"></span>
+    </div>
+    <div class="picker-grid" id="picker-grid"></div>
+    <div class="picker-empty hidden" id="picker-empty">No template matches. <a href="#" id="picker-reset">Show all</a></div>
+  </div>
+</div>
+
+<div class="modal hidden" id="settings" role="dialog" aria-modal="true" aria-labelledby="set-title">
+  <div class="card">
+    <h2 id="set-title">Settings</h2>
+    <div class="field"><label for="s-author">Author name <span class="hint">shown on every map you build; required</span></label><input id="s-author" maxlength="40" placeholder="Your name"></div>
+    <div class="field"><label for="s-zerok">Zero-K folder</label>
+      <div class="pathrow"><input id="s-zerok" spellcheck="false"><button class="ghost" data-pick="s-zerok">Browse</button></div>
+      <div class="hint" id="s-zerok-found"></div></div>
+    <div class="field"><label for="s-outdir">Output folder <span class="hint">built .sdz files go here</span></label>
+      <div class="pathrow"><input id="s-outdir" spellcheck="false"><button class="ghost" data-pick="s-outdir">Browse</button></div></div>
+    <div class="field"><label for="s-projdir">Project folder <span class="hint">saved .forge.json files go here</span></label>
+      <div class="pathrow"><input id="s-projdir" spellcheck="false"><button class="ghost" data-pick="s-projdir">Browse</button></div></div>
+    <div class="field adv-field">
+      <label class="switch"><input type="checkbox" id="s-advanced"><span></span>Advanced mode</label>
+      <div class="help">Lifts the limits of all map settings (sizes, counts, heights, timings). Maps may break.</div>
+    </div>
+    <div class="field">
+      <label for="s-check">Check a map file <span class="hint">was it made with Atlas Map Forge?</span></label>
+      <div class="pathrow"><input id="s-check" spellcheck="false" placeholder="path to a .sdz, .sd7 or .smf file"><button class="ghost" id="s-check-pick">Browse</button><button class="ghost" id="s-check-go">Check</button></div>
+      <pre class="checkres hidden" id="s-check-res"></pre>
+    </div>
+    <div class="note warn hidden" id="s-error"></div>
+    <div class="actions"><button class="ghost" id="s-cancel">Cancel</button><button class="primary" id="s-save">Save</button></div>
+  </div>
+</div>
+
+<div class="modal hidden" id="adv-warn" role="alertdialog" aria-modal="true" aria-labelledby="adv-title">
+  <div class="card warncard">
+    <h2 id="adv-title">Turn on advanced mode?</h2>
+    <p>Advanced mode removes the safe limits of every map setting. You can then build maps that are
+      <b>unplayable, unbalanced or broken</b>: bases nobody can reach, metal spots inside walls, huge build times,
+      maps that fail to build, lag or crash Zero-K.</p>
+    <p>The check report still warns you, but nothing stops you. Use it at your own risk and test such maps
+      before you share them.</p>
+    <div class="actions"><button class="ghost" id="adv-cancel">Cancel</button><button class="forge warn" id="adv-ok">I understand, turn it on</button></div>
+  </div>
+</div>
+
+<div class="modal hidden" id="ed-confirm" role="alertdialog" aria-modal="true" aria-labelledby="ed-confirm-title">
+  <div class="card warncard">
+    <h2 id="ed-confirm-title">Discard manual changes?</h2>
+    <p>All manual changes will be discarded - continue?</p>
+    <div class="actions"><button class="ghost" id="ed-cancel">Cancel</button><button class="forge warn" id="ed-ok">Continue</button></div>
+  </div>
+</div>
+<div class="modal hidden" id="done" role="dialog" aria-modal="true" aria-labelledby="done-title">
+  <div class="card donecard">
+    <div class="done-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="30" height="30"><path fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+    <h2 id="done-title">Map forged</h2>
+    <div class="done-name" id="done-name"></div>
+    <img class="done-shot hidden" id="done-shot" alt="">
+    <div class="done-meta" id="done-meta"></div>
+    <p class="done-note" id="done-note"></p>
+    <div class="done-acts" id="done-acts"></div>
+    <div class="done-kofi">
+      <p>Enjoying Atlas Map Forge? Support me on Ko-fi to help development.</p>
+      <button class="kofi big" id="done-kofi">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M4 6h12a1 1 0 0 1 1 1v1h1.5a3.5 3.5 0 0 1 0 7H16.6A6 6 0 0 1 11 19H9a6 6 0 0 1-6-6V7a1 1 0 0 1 1-1Zm13 4v3h1.5a1.5 1.5 0 0 0 0-3H17Zm-7.6 1.1c-.9-.9-2.4-.3-2.4 1 0 1.3 1.9 2.5 3 3.3 1.1-.8 3-2 3-3.3 0-1.3-1.5-1.9-2.4-1l-.6.6-.6-.6Z"/></svg>
+        Support on Ko-fi</button>
+    </div>
+    <div class="actions"><button class="primary" id="done-close">Close</button></div>
+  </div>
+</div>
+
+<div class="infopop hidden" id="infopop" role="tooltip"></div>
+<div class="toast hidden" id="toast"></div>
+<script src="app.js"></script>
+<script src="editor.js"></script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+{
+  "id": "river_delta",
+  "title": "River Delta",
+  "base": "skirmish",
+  "mode": "competitive",
+  "concept": "A distributary fan with several crossing fronts and contested delta islands.",
+  "difference_from_base": "An explicit connected river graph that widens into delta islands, with planned wading or dry crossing corridors; not the Watershed drainage-noise family.",
+  "intended_players": "1v1 or two teams up to 4v4, west versus east.",
+  "routes": "Two to four reserved east-west crossing corridors span all river arms; amphibians can bypass the crossings.",
+  "economy": "Mirrored land economy on mainland and delta islands; three fixed opening spots per side, general mex and geo controls.",
+  "visual_review": true,
+  "in_game_tested": false,
+  "known_weaknesses": [
+    "No live Zero-K playtest.",
+    "Advanced crowding can merge arms and sacrifice island space.",
+    "Land validation profile; no promised fleet route through fords."
+  ],
+  "core_wishes": [
+    "Requires the unchanged _wildlands.py helper from TPL-highlands-1."
+  ]
+}

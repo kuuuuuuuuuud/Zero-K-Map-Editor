@@ -1,0 +1,25 @@
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+out/
+*.sdz
+*_preview.png
+*_detail.png
+
+Python/
+.claude/
+
+# --- Zero-K AI Map Editor (fork) additions ---
+.env
+output/
+trash/
+logs/
+*.sd7
+*.sdz
+__pycache__/
+.venv/
+reference/
+

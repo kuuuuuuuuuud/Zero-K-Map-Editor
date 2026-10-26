@@ -1,0 +1,85 @@
+name: windows-app
+
+# Builds the one-file Windows program. Manual runs upload it as a workflow artifact;
+# a version tag (v0.3.0 ...) also creates a draft GitHub release with the program attached.
+# A manual run with "release_tag" set (e.g. v0.4.21) creates that tag on the built commit and publishes a
+# GitHub release with the program; notes come from docs/release-notes/<tag>.md.
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Publish a GitHub release with this tag (empty = artifact only)"
+        required: false
+        default: ""
+      prerelease:
+        description: "Mark the release as a pre-release"
+        type: boolean
+        default: true
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  exe:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: python -m pip install ".[app]" pyinstaller
+      - name: Pack
+        run: pyinstaller -y packaging/atlasforge.spec
+      - name: Self-test of the packed program (preview and a full map build)
+        shell: pwsh
+        run: |
+          $env:ATLASFORGE_LOG = "$PWD\selftest.log"
+          $p = Start-Process dist\AtlasMapForge.exe -ArgumentList "--selftest","--build" -Wait -PassThru
+          Get-Content selftest.log
+          if ($p.ExitCode -ne 0) { exit 1 }
+      - name: Window test (the real app window must stay responsive and show a preview)
+        shell: pwsh
+        run: |
+          $env:APPDATA = "$PWD\appdata"
+          New-Item -ItemType Directory -Force "$env:APPDATA\AtlasMapForge" | Out-Null
+          '{"author": "CI"}' | Set-Content "$env:APPDATA\AtlasMapForge\config.json"
+          $env:ATLASFORGE_LOG = "$PWD\gui.log"
+          $p = Start-Process dist\AtlasMapForge.exe -PassThru
+          $bad = 0; $seen = $false
+          for ($i = 0; $i -lt 45; $i++) {
+            Start-Sleep -Seconds 2
+            $wins = Get-Process AtlasMapForge -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 }
+            if ($wins) { $seen = $true; if ($wins | Where-Object { -not $_.Responding }) { $bad++ } else { $bad = 0 } }
+            if ($bad -ge 3) { Write-Host "window not responding"; break }
+            if ((Test-Path gui.log) -and (Select-String -Path gui.log -Pattern "first preview shown" -Quiet)) { break }
+          }
+          Get-Process AtlasMapForge -ErrorAction SilentlyContinue | Stop-Process -Force
+          if (Test-Path gui.log) { Get-Content gui.log }
+          $ok = (Test-Path gui.log) -and (Select-String -Path gui.log -Pattern "first preview shown" -Quiet)
+          Write-Host "window seen: $seen, not responding polls: $bad, preview shown: $ok"
+          if ($bad -ge 3 -or -not $ok) { exit 1 }
+      - uses: actions/upload-artifact@v6
+        with:
+          name: AtlasMapForge-windows
+          path: dist/AtlasMapForge.exe
+      - name: Draft release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create ${{ github.ref_name }} dist/AtlasMapForge.exe --draft --title "Atlas Map Forge ${{ github.ref_name }}" --notes "See CHANGELOG.md."
+      - name: Publish release (manual run with release_tag)
+        if: github.event_name == 'workflow_dispatch' && inputs.release_tag != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.release_tag }}
+        run: |
+          notes="docs/release-notes/$TAG.md"
+          [ -f "$notes" ] || notes=/dev/null
+          pre=""
+          if [ "${{ inputs.prerelease }}" = "true" ]; then pre="--prerelease"; fi
+          gh release create "$TAG" dist/AtlasMapForge.exe --target "$GITHUB_SHA" $pre \
+            --title "Atlas Map Forge ${TAG#v}" --notes-file "$notes"

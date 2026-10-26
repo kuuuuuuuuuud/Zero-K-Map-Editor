@@ -1,0 +1,18 @@
+{
+  "id": "coastal_front",
+  "title": "Coastal Front",
+  "base": "open_sea",
+  "mode": "naval",
+  "concept": "A full-width land front in the north shares a long shoreline with a navigable sea in the south.",
+  "difference_from_base": "Both land armies and fleets have complete east-west routes; Open Sea separates the coastal bases by water.",
+  "intended_players": "1v1 or two teams sharing a compact mainland start box on each side.",
+  "routes": "Guaranteed dry tank staging corridor, continuous coastal fleet route, gentle amphibious beaches and hover access. Additional checks require the land route as well as naval connectivity.",
+  "economy": "Mirrored mainland and underwater expansion fields, three safe opening spots and optional geothermal vents. Underwater economy encourages ships without replacing the land front. A submerged shelf keeps underwater expansion sites available at deep-sea and shallow-beach settings.",
+  "visual_review": true,
+  "in_game_tested": false,
+  "known_weaknesses": [
+    "Advanced land depth and beach combinations may flood the land route or strand a port.",
+    "No live Zero-K playtest yet."
+  ],
+  "core_wishes": []
+}

@@ -1,0 +1,20 @@
+{
+  "id": "watershed",
+  "title": "Procedural Watershed",
+  "base": "skirmish",
+  "mode": "competitive",
+  "concept": "A seeded trunk-and-tributary graph, warped into braided channels, lake-rich wetlands or dry ravines.",
+  "difference_from_base": "Generates a connected branching channel graph and warps its distance field rather than taking the absolute value of a noise field as Skirmish canyon does.",
+  "intended_players": "1v1 or two teams with three symmetric orientations.",
+  "routes": "Land routes and economy receive automatic tank crossings; channel depth changes the value of hover and amphibious shortcuts.",
+  "economy": "Automatic mirrored resource placement, with three protected opening spots on each side. No template-specific metal-count slider.",
+  "visual_review": true,
+  "in_game_tested": false,
+  "known_weaknesses": [
+    "Land map, not a dedicated naval map; no ship connectivity promise.",
+    "No live Zero-K playtest."
+  ],
+  "core_wishes": [
+    "Public procedural connectivity and resource-placement helpers."
+  ]
+}

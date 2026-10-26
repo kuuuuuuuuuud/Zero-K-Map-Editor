@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "atlas-map-forge"
+dynamic = ["version"]
+description = "Map generator for Zero-K: builds complete, ready-to-play .sdz maps"
+readme = "README.md"
+license = { text = "GPL-2.0-or-later" }
+authors = [{ name = "Scuide" }]
+requires-python = ">=3.9"
+dependencies = [
+    "numpy>=1.22",
+    "scipy>=1.8",
+    "Pillow>=9.2",
+    "scikit-image>=0.19",
+    "etcpak>=0.9.8",
+    "python-dotenv>=1.0",
+    "requests>=2.31",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: GNU General Public License v2 or later (GPLv2+)",
+    "Topic :: Games/Entertainment :: Real Time Strategy",
+]
+
+[project.optional-dependencies]
+app = ["pywebview>=5.0", "py7zr>=0.20"]
+test = ["pytest>=7", "pytest-xdist>=3", "lupa>=2.0"]
+
+[project.urls]
+Homepage = "https://github.com/Scuide/atlas-map-forge"
+
+[project.scripts]
+atlasforge = "atlasforge.cli:main"
+
+[project.gui-scripts]
+atlasforge-app = "atlasforge.app:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "atlasforge.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["atlasforge*"]
+
+[tool.setuptools.package-data]
+atlasforge = ["assets/*"]
+"atlasforge.gadgets" = ["*.lua"]
+"atlasforge.app" = ["web/*", "web/thumbs/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

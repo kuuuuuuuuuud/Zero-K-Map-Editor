@@ -1,0 +1,20 @@
+{
+  "id": "highlands",
+  "title": "Procedural Highlands",
+  "base": "skirmish",
+  "mode": "competitive",
+  "concept": "Warped seeded terrain regions produce mesas, rounded mountain groups or stepped uplands.",
+  "difference_from_base": "Uses a seeded region partition and distance to cell borders rather than reusing a Skirmish terrain style.",
+  "intended_players": "1v1 or two teams, with diagonal, north-south and east-west symmetry.",
+  "routes": "Natural inter-region valleys and automatic Skirmish tank ramp carving connect opposing bases and economy.",
+  "economy": "Automatic mirrored resource placement; three protected opening spots per side, expansion density handled by existing core rules.",
+  "visual_review": true,
+  "in_game_tested": false,
+  "known_weaknesses": [
+    "No live Zero-K playtest.",
+    "Advanced extreme relief may require many ramps or leave fewer accessible expansions."
+  ],
+  "core_wishes": [
+    "Expose the existing procedural carver/resource helpers as a supported public template API."
+  ]
+}

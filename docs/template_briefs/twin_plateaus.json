@@ -1,0 +1,18 @@
+{
+  "id": "twin_plateaus",
+  "title": "Twin Plateaus",
+  "base": "skirmish",
+  "mode": "competitive",
+  "concept": "High team home plateaus with several deliberate ramps into contested lowlands.",
+  "difference_from_base": "Promotes the Twin Plateaus example into a scalable, seeded template with protected ramps, configurable approach count and general resource controls.",
+  "intended_players": "1v1 or two teams up to 4v4; two starting pads per team.",
+  "routes": "Two to four planned ramps per side connect the home heights and shared lowland; ramp corridors are reserved from resource/reclaim placement.",
+  "economy": "Procedural mirrored economy and geothermal sites, with three protected opening spots per side on the home plateau.",
+  "visual_review": true,
+  "in_game_tested": false,
+  "known_weaknesses": [
+    "No live Zero-K playtest.",
+    "Advanced very high or deep plateaus may leave little lowland or overlapping approaches."
+  ],
+  "core_wishes": []
+}

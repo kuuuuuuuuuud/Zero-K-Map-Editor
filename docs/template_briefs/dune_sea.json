@@ -1,0 +1,20 @@
+{
+  "id": "dune_sea",
+  "title": "Procedural Dune Sea",
+  "base": "skirmish",
+  "mode": "competitive",
+  "concept": "Domain-warped wind waves form long dune chains, curved crescent fields or intersecting star dunes, with seeded rocky uplands.",
+  "difference_from_base": "Builds directional and intersecting wind patterns rather than selecting an existing Skirmish noise style or just a desert biome.",
+  "intended_players": "1v1 or two teams, with diagonal, north-south and east-west orientations.",
+  "routes": "Dune valleys and breaks form organic routes; automatic Skirmish ramp carving ensures tank access to bases and expansion economy.",
+  "economy": "Core automatic mirrored resources; six protected opening spots. No private metal-count parameter.",
+  "visual_review": true,
+  "in_game_tested": false,
+  "known_weaknesses": [
+    "No live Zero-K playtest.",
+    "Extreme advanced dune height and density may require many ramps."
+  ],
+  "core_wishes": [
+    "Public procedural ramp/resource API."
+  ]
+}
