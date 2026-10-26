@@ -26,6 +26,7 @@ class Param:
     adv_choices: Optional[tuple] = None
     group: str = ""                  # heading in the app ("" = template settings)
     info: str = ""                   # long explanation for the info popup in the app (what it does, effect in game)
+    even: bool = False               # int params: value must be an even number (e.g. map width/height)
 
     def limits(self, advanced=False):
         lo, hi = self.min, self.max
@@ -60,11 +61,13 @@ class Param:
             more = " (wider limits in advanced mode)" if not advanced and (self.adv_min is not None
                                                                           or self.adv_max is not None) else ""
             raise ValueError(f"{self.key}: {v} is outside {lo:g}..{hi:g}{more}")
+        if self.even and v % 2:
+            raise ValueError(f"{self.key}: {v} must be an even number")
         return v
 
     def to_dict(self):
         d = {k: getattr(self, k) for k in ("key", "label", "kind", "default", "min", "max", "step", "help",
-                                           "adv_min", "adv_max", "group", "info")}
+                                           "adv_min", "adv_max", "group", "info", "even")}
         if self.choices is not None:
             d["choices"] = list(self.choices)
         if self.adv_choices is not None:

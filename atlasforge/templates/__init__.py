@@ -30,13 +30,15 @@ from .fjord_coast import FjordCoastTemplate
 from .chicken_mesa import ChickenMesaTemplate
 from .canyon_network import CanyonNetworkTemplate
 from .mountain_spine import MountainSpineTemplate
+from .editor import EditorTemplate
 
 _REGISTRY = {t.id: t for t in (Skirmish(), Chokepoint(), RiverCrossing(), Arena(), Volcano(), ChickenRings(),
                                 OpenSea(), Archipelago(), IslandStraits(), ThreeLanesTemplate(),
                                 CoastalFrontTemplate(), AtollTemplate(), FFARing(), Asteroid(), HighlandsTemplate(),
                                 WatershedTemplate(), DuneSeaTemplate(), OpenDunesTemplate(), TwinPlateausTemplate(),
                                 LakeDistrictTemplate(), RiverDeltaTemplate(), FjordCoastTemplate(),
-                                ChickenMesaTemplate(), CanyonNetworkTemplate(), MountainSpineTemplate())}
+                                ChickenMesaTemplate(), CanyonNetworkTemplate(), MountainSpineTemplate(),
+                                EditorTemplate())}
 
 
 def all_templates():

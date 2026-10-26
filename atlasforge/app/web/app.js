@@ -208,7 +208,7 @@ const pLimits = (p) => isAdvanced()
   ? [p.adv_min ?? p.min, p.adv_max ?? p.max] : [p.min, p.max];
 const pChoices = (p) => (isAdvanced() && p.adv_choices ? p.adv_choices : p.choices);
 const beyond = (p, v) => (p.kind === "choice" ? !p.choices.map(String).includes(String(v))
-  : (p.kind === "int" || p.kind === "float") && (v < p.min || v > p.max));
+  : (p.kind === "int" || p.kind === "float") && (v < p.min || v > p.max || (p.even && Number(v) % 2 !== 0)));
 
 function clampValues(id) {
   // keep stored values inside what the current mode allows
@@ -221,6 +221,7 @@ function clampValues(id) {
     } else if (p.kind === "int" || p.kind === "float") {
       const [lo, hi] = pLimits(p);
       vals[p.key] = Math.min(hi, Math.max(lo, vals[p.key]));
+      if (p.even) vals[p.key] = Math.min(hi, Math.max(lo, Math.round(vals[p.key] / 2) * 2));
     }
   }
 }
@@ -309,6 +310,29 @@ function paramField(p, vals) {
         };
         chips.appendChild(b);
       }
+    } else if (p.even) {
+      const [lo, hi] = pLimits(p);
+      f.innerHTML = `<label>${esc(p.label)}${ib} <span class="val"></span></label>
+        <input type="number" min="${lo}" max="${hi}" step="${p.step || 2}">${help}`;
+      const inp = f.querySelector("input");
+      const out = f.querySelector(".val");
+      inp.value = vals[p.key];
+      const show = (v) => {
+        out.textContent = String(v);
+        const b = beyond(p, Number(v));
+        out.classList.toggle("beyond", b);
+        f.classList.toggle("beyond", b);
+      };
+      show(vals[p.key]);
+      inp.onchange = () => {
+        let v = parseInt(inp.value, 10);
+        if (Number.isNaN(v)) { inp.value = vals[p.key]; return; }
+        v = Math.min(hi, Math.max(lo, v));
+        if (v % 2) v = Math.round(v / 2) * 2;   // snap odd values to the nearest even
+        v = Math.min(hi, Math.max(lo, v));
+        inp.value = v;
+        setValue(p.key, v);
+      };
     } else {
       const fmt = (v) => (p.kind === "float" ? Number(v).toFixed(1) : String(v));
       const [lo, hi] = pLimits(p);

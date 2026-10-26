@@ -100,3 +100,57 @@ def ramp(hm, x0, z0, x1, z1, width, strength=1.0):
     w = t * t * (3.0 - 2.0 * t) * float(strength)
     out += w * ((ha + uc * (hb - ha)) - out)
     return out.astype(hm.dtype)
+
+
+def apply_brush(hm, x, y, radius, strength, mode, symmetry="ew_ns"):
+    """Apply a smooth circular brush (gaussian falloff) at pixel (x, y) and mirror it.
+
+    hm       : 2D float heightmap array (row = z, column = x); the input is never modified.
+    x, y     : brush centre in heightmap pixel coordinates (x = column, y = row).
+    radius   : brush radius in pixels (> 0).
+    strength : height to add (mode="raise") or subtract (mode="lower"), in elmos.
+    mode     : "raise" or "lower".
+    symmetry : "none", "ew" (mirror across the vertical centre line), "ns" (mirror
+               across the horizontal centre line) or "ew_ns" (both mirrors).
+
+    Returns a NEW heightmap with the same shape and dtype as ``hm``.
+    """
+    hm = np.asarray(hm)
+    if hm.ndim != 2:
+        raise ValueError("hm must be a 2D array")
+    if mode not in ("raise", "lower"):
+        raise ValueError(f"mode must be 'raise' or 'lower', got {mode!r}")
+    if symmetry not in ("none", "ew", "ns", "ew_ns"):
+        raise ValueError(f"symmetry must be one of none/ew/ns/ew_ns, got {symmetry!r}")
+    if radius <= 0:
+        raise ValueError("radius must be > 0")
+
+    nz, nx = hm.shape
+    out = hm.astype(np.float64, copy=True)
+    sign = 1.0 if mode == "raise" else -1.0
+    strength = float(strength)
+
+    # Pixel indices run 0..nx-1 across and 0..nz-1 down; the map centre line sits at
+    # (nx-1)/2, so the mirror of column c is (nx-1) - c (and likewise for rows).
+    centres = [(float(x), float(y))]
+    if symmetry in ("ew", "ew_ns"):
+        centres.append(((nx - 1) - float(x), float(y)))
+    if symmetry in ("ns", "ew_ns"):
+        centres.append((float(x), (nz - 1) - float(y)))
+    if symmetry == "ew_ns":
+        centres.append(((nx - 1) - float(x), (nz - 1) - float(y)))
+
+    sigma = float(radius) / 3.0
+    r = int(np.ceil(radius)) + 1
+    for cx, cy in centres:
+        x0 = max(0, int(np.floor(cx - r)))
+        x1 = min(nx, int(np.ceil(cx + r)) + 1)
+        y0 = max(0, int(np.floor(cy - r)))
+        y1 = min(nz, int(np.ceil(cy + r)) + 1)
+        yy, xx = np.mgrid[y0:y1, x0:x1].astype(np.float64)
+        d2 = (xx - cx) ** 2 + (yy - cy) ** 2
+        w = np.exp(-0.5 * d2 / (sigma * sigma))
+        w *= d2 <= float(radius) * float(radius)   # clip the tail cleanly at the rim
+        out[y0:y1, x0:x1] += sign * strength * w
+    return out.astype(hm.dtype)
+
