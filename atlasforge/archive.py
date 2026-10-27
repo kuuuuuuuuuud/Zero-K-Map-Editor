@@ -12,6 +12,7 @@ from .config import ForgeConfig
 from .formats import (dds_bytes, dds_info, lua_syntax_check, mapinfo_lua, metal_layout_lua, minimap_dxt, png_bytes,
                       smt_header, startboxes_lua, tiles_from_strip, write_smf)
 from .features import grass_map, place_trees
+from .terrain import slope_deg
 from .render import (PAINT_LAYERS, NoiseBank, build_texture_fields, crack_field, detail_bmp, material_files,
                      render_rgb)
 
@@ -71,6 +72,21 @@ def _minimap_size(nx, nz):
     return best[1], best[2]
 
 
+CLIFF_SLOPE_DEG = 45.0        # cells steeper than this read as the "Cliff" terrain type (see mapinfo.lua)
+
+
+def _typemap_slope(hm):
+    """Max geometric slope (degrees) inside each 2x2-square typemap cell.
+
+    The SMF type map stores one byte per 2x2 heightmap squares (16x16 elmos). A cell is
+    marked "Cliff" when any of its squares is steeper than CLIFF_SLOPE_DEG, so even a thin
+    fortress wall flank that only clips the cell is still detected.
+    """
+    slope = slope_deg(hm)
+    m, n = hm.shape[0] // 2 * 2, hm.shape[1] // 2 * 2      # drop the wrap-around edge row/col
+    return slope[:m, :n].reshape(m // 2, 2, n // 2, 2).max(axis=(1, 3)).astype(np.float32)
+
+
 def build_archive(name, hm, sym, starts, mexes, geos, biome, rng, outdir, desc, config=None, log=print,
                   preview=True, extra=None, tree_block=None, startboxes=None, extra_files=None, features=None,
                   random_trees=True, preview_marks=None, preview_start_colors=None, paint=None, workers=None,
@@ -119,8 +135,12 @@ def build_archive(name, hm, sym, starts, mexes, geos, biome, rng, outdir, desc, 
     for m in mexes:
         metal[np.hypot(mi * 16 + 8 - m["z"], mj * 16 + 8 - m["x"]) < 40] = 255
     typemap = np.zeros((nz // 2, nx // 2), np.uint8)
+    typemap[_typemap_slope(hmq) >= CLIFF_SLOPE_DEG] = 1                    # steep walls -> "Cliff" terrain type
     if biome.get("void"):                                                   # space: terrain type 255, impassable
         typemap[hmq[:-1:2, :-1:2][:nz // 2, :nx // 2] < 0] = 255
+    cliff_cells = int((typemap == 1).sum())
+    if cliff_cells:
+        log(f"  cliff terrain on {100 * cliff_cells / typemap.size:.0f}% of the map")
 
     Wpx, Hpx = nx * TEX_PER_SQ, nz * TEX_PER_SQ
     TF = build_texture_fields(hmq)

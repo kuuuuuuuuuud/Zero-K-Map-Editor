@@ -391,6 +391,12 @@ def mapinfo_lua(name, desc, author, hmin, hmax, smtname, starts, biome, water_h,
       hardness = 1.0,
       receivetracks = true,
       movespeeds = {{ tank = 1.0, kbot = 1.0, hover = 1.0, ship = 1.0 }},
+    }},
+    [1] = {{
+      name = "Cliff",
+      hardness = 1.0,
+      receivetracks = false,
+      movespeeds = {{ tank = 0.5, kbot = 0.7, hover = 1.0, ship = 0.0 }},
     }},{void_type}
   }},
 
