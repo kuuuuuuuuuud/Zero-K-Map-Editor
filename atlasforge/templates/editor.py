@@ -1,6 +1,6 @@
 """Forge Editor blank template: custom even width/height flat sand map for manual terrain work."""
 from ..editor import flat_sand_design
-from ..surfaces import SURFACE_LABELS, surface_key
+from ..surfaces import SURFACE_LABELS, surface_key, surface_label
 from .base import Param, Template
 
 
@@ -36,6 +36,15 @@ class EditorTemplate(Template):
     def all_params(self):
         # A blank editor map has no template-specific resources; only its dimensions and surface.
         return self.params
+
+    def resolve(self, values=None, advanced=False):
+        """Defaults + given values. The surface choice accepts both its UI label
+        ("Water") and its internal key ("water"), so projects saved by older or
+        newer versions of the app always load."""
+        values = dict(values or {})
+        if "surface" in values:
+            values["surface"] = surface_label(values["surface"])
+        return super().resolve(values, advanced)
 
     def make(self, v, seed, log=print):
         return flat_sand_design(v["width"], v["height"], seed=seed, title="New Map",

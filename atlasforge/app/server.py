@@ -461,6 +461,7 @@ class Forge:
             text = str(data.get("text", ""))
         p = project.loads(text)
         project.validate(p, templates=self._template_ids())
+        self._default_surface(p)
         known = ("format", "version", "app_version", "template", "values", "seed", "symmetry", "edits", "title",
                  "author", "description", "heightmap_path", "texture_path")
         out = dict(project=p, extra={k: v for k, v in p.items() if k not in known})
@@ -469,24 +470,56 @@ class Forge:
             out["design"] = design
         return out
 
+    def _default_surface(self, p):
+        """Default and normalise a loaded project's surface value.
+
+        Old projects predate the surface feature and have no ``surface`` key in
+        ``values``; the UI still needs a concrete value to bind its selector to.
+        Any template that declares a ``surface`` parameter gets a canonical value
+        (stored as its UI label, e.g. ``"None (Dry)"``), independent of the
+        template name. An unknown/legacy value falls back to ``none`` (dry).
+        """
+        from ..surfaces import surface_key, surface_label
+        from ..templates import get
+        try:
+            t = get(p.get("template"))
+        except KeyError:
+            return
+        if not any(pp.key == "surface" for pp in t.all_params()):
+            return
+        values = dict(p.get("values") or {})
+        raw = values.get("surface", "none")
+        try:
+            key = surface_key(raw)
+        except ValueError:
+            key = "none"
+        values["surface"] = surface_label(key)
+        p["values"] = values
+
     def _restore_design(self, p, path):
         """Rebuild a live Forge Editor design from a saved heightmap.npy + texture.png.
 
         Only used when the project references a heightmap, was loaded from disk (so the binaries
-        can be resolved next to the .forge.json) and is the blank-sand editor template. Returns the
-        full design payload the UI needs, or None when there is nothing to restore (procedural maps
-        or text-only loads, which regenerate deterministically from the template).
+        can be resolved next to the .forge.json) and its template declares a ``surface`` parameter
+        (the blank-sand editor template). Returns the full design payload the UI needs, or None when
+        there is nothing to restore (procedural maps or text-only loads, which regenerate
+        deterministically from the template).
         """
         hm_rel = p.get("heightmap_path")
-        if not path or not hm_rel or p.get("template") != "editor":
+        if not path or not hm_rel:
+            return None
+        from .. import forge
+        from ..surfaces import surface_extra_files, surface_key, surface_water
+        from ..templates import get
+        template_id = p.get("template")
+        if not any(pp.key == "surface" for pp in get(template_id).all_params()):
             return None
         folder = os.path.dirname(path)
         hm_path = os.path.join(folder, hm_rel)
         if not os.path.isfile(hm_path):
             raise ValueError(f"Saved heightmap not found next to the project: {hm_rel}")
         hm = np.load(hm_path).astype(np.float32)
-        from .. import forge
-        base = forge.make("editor", p.get("values") or {}, seed=p.get("seed", 1))
+        base = forge.make(template_id, p.get("values") or {}, seed=p.get("seed", 1))
         if hm.shape != base.hm.shape:
             raise ValueError(f"Saved heightmap shape {tuple(hm.shape)} does not match the map "
                              f"{tuple(base.hm.shape)} (the width/height values may have changed)")
@@ -496,6 +529,12 @@ class Forge:
             tex_path = os.path.join(folder, tex_rel)
             if os.path.isfile(tex_path):
                 base.diffuse = Image.open(tex_path).convert("RGB")
+        # Apply the loaded project's surface explicitly (mapinfo water table + any
+        # extra files such as the void death gadget), decoupled from the blank-sand
+        # factory so it always follows the project data.
+        surf = surface_key(base.values.get("surface", "none"))
+        base.water = surface_water(surf)
+        base.extra_files = dict(base.extra_files, **surface_extra_files(surf))
         ok, lines = forge.check(base)
         e = Entry(base, ok, lines)
         did = uuid.uuid4().hex[:12]

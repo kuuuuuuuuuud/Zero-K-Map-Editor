@@ -15,6 +15,7 @@ SURFACES = ("none", "water", "lava", "void")
 # Human labels shown in the editor UI (they are also the stored choice values).
 SURFACE_LABELS = ("None (Dry)", "Water", "Lava", "Void (Death Pit)")
 SURFACE_BY_LABEL = {label: key for label, key in zip(SURFACE_LABELS, SURFACES)}
+SURFACE_LABEL_BY_KEY = {key: label for key, label in zip(SURFACES, SURFACE_LABELS)}
 
 # Standard blue water palette ("water", and a safe fallback on dry/void maps).
 WATER_BASE = (0.4, 0.6, 0.75)
@@ -70,6 +71,11 @@ def surface_key(value):
     if value in SURFACE_BY_LABEL:
         return SURFACE_BY_LABEL[value]
     raise ValueError(f"unknown surface {value!r}, expected one of {SURFACES} or {SURFACE_LABELS}")
+
+
+def surface_label(value):
+    """Normalise a surface name (key or UI label) to its UI label."""
+    return SURFACE_LABEL_BY_KEY[surface_key(value)]
 
 
 def surface_water(surface_type, waterlevel=0.0):
