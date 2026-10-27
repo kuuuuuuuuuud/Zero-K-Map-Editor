@@ -1,11 +1,13 @@
 """Terrain brushes (editor stage B): pure functions on a heightmap array.
 
 The heightmap is a 2D float array in elmos, row = z, column = x, one cell per SQ elmo square
-(atlasforge.SQ). All parameters are in elmos: cx/cz address the brush centre, radius its reach,
-strength scales the effect from 0 (no-op) to 1. Every function returns a NEW array with the same
-shape and dtype; the input is never modified. The weight w(d) falls off smoothly from 1 at the
-centre to 0 for d >= radius (smoothstep), so brush edges are soft, and cells beyond the array are
-simply absent - borders are clipped cleanly. Deterministic: no randomness.
+(atlasforge.SQ). Every function returns a NEW array with the same shape and dtype; the input is
+never modified, borders are clipped cleanly and everything is deterministic.
+
+The legacy raise_/lower/flatten/smooth/ramp helpers below take elmo coordinates and a smooth
+smoothstep weight w(d) (soft edges). The editor brushes ``apply_brush`` and ``apply_ramp`` take
+heightmap *pixel* coordinates and use a hard edge (1.0 inside the footprint, 0.0 outside) so the
+on-screen cursor matches the painted area exactly.
 """
 import numpy as np
 
@@ -102,55 +104,166 @@ def ramp(hm, x0, z0, x1, z1, width, strength=1.0):
     return out.astype(hm.dtype)
 
 
-def apply_brush(hm, x, y, radius, strength, mode, symmetry="ew_ns"):
-    """Apply a smooth circular brush (gaussian falloff) at pixel (x, y) and mirror it.
+def _mirrors(x, y, symmetry, nx, nz):
+    """Mirror pixel (x, y) across the map centre like the object editor.
+
+    Pixel indices run 0..nx-1 across and 0..nz-1 down; the centre line sits at (nx-1)/2,
+    so the mirror of column c is (nx-1) - c (and likewise for rows).
+    """
+    pts = [(float(x), float(y))]
+    if symmetry in ("ew", "ew_ns"):
+        pts.append(((nx - 1) - float(x), float(y)))
+    if symmetry in ("ns", "ew_ns"):
+        pts.append((float(x), (nz - 1) - float(y)))
+    if symmetry == "ew_ns":
+        pts.append(((nx - 1) - float(x), (nz - 1) - float(y)))
+    return pts
+
+
+def _footprint(hm, cx, cy, radius, shape):
+    """Boolean mask of the brush footprint at pixel (cx, cy) with a hard edge."""
+    nz, nx = hm.shape[:2]
+    x = np.arange(nx)[None, :] - float(cx)
+    z = np.arange(nz)[:, None] - float(cy)
+    if shape == "square":
+        return (np.abs(x) <= radius) & (np.abs(z) <= radius)
+    return (x * x + z * z) <= float(radius) * float(radius)
+
+
+def _paint(hm, mask, mode, strength, limit):
+    """Apply raise/lower/smooth to the cells selected by ``mask``; returns a new array."""
+    out = hm.astype(np.float64, copy=True)
+    if mode == "raise":
+        painted = out[mask] + strength
+        if limit is not None:
+            painted = np.minimum(painted, float(limit))
+        out[mask] = painted
+    elif mode == "lower":
+        painted = out[mask] - strength
+        if limit is not None:
+            painted = np.maximum(painted, float(limit))
+        out[mask] = painted
+    else:                                                     # smooth: average painted cells with their neighbours
+        passes = max(0, min(50, int(round(strength))))
+        for _ in range(passes):
+            out += mask * (_box3(out) - out)
+    return out.astype(hm.dtype)
+
+
+def apply_brush(hm, x, y, radius, strength, mode="raise", symmetry="ew_ns", shape="circle", limit=None):
+    """Apply a hard-edged terrain brush at pixel (x, y) and mirror it.
 
     hm       : 2D float heightmap array (row = z, column = x); the input is never modified.
     x, y     : brush centre in heightmap pixel coordinates (x = column, y = row).
-    radius   : brush radius in pixels (> 0).
-    strength : height to add (mode="raise") or subtract (mode="lower"), in elmos.
-    mode     : "raise" or "lower".
+    radius   : brush radius in pixels (> 0); the footprint is 1.0 inside and 0.0 outside.
+    strength : mode="raise"/"lower" -> height added/removed per dab in elmos;
+               mode="smooth"        -> number of 3x3 box-smoothing passes (1..50).
+    mode     : "raise", "lower" or "smooth".
     symmetry : "none", "ew" (mirror across the vertical centre line), "ns" (mirror
                across the horizontal centre line) or "ew_ns" (both mirrors).
+    shape    : "circle" or "square".
+    limit    : optional height bound in elmos. mode="raise" never paints above it,
+               mode="lower" never paints below it (only painted cells are clamped).
+               Ignored for mode="smooth".
 
     Returns a NEW heightmap with the same shape and dtype as ``hm``.
     """
     hm = np.asarray(hm)
     if hm.ndim != 2:
         raise ValueError("hm must be a 2D array")
-    if mode not in ("raise", "lower"):
-        raise ValueError(f"mode must be 'raise' or 'lower', got {mode!r}")
+    if mode not in ("raise", "lower", "smooth"):
+        raise ValueError(f"mode must be 'raise', 'lower' or 'smooth', got {mode!r}")
+    if shape not in ("circle", "square"):
+        raise ValueError(f"shape must be 'circle' or 'square', got {shape!r}")
     if symmetry not in ("none", "ew", "ns", "ew_ns"):
         raise ValueError(f"symmetry must be one of none/ew/ns/ew_ns, got {symmetry!r}")
+    radius = float(radius)
     if radius <= 0:
         raise ValueError("radius must be > 0")
-
-    nz, nx = hm.shape
-    out = hm.astype(np.float64, copy=True)
-    sign = 1.0 if mode == "raise" else -1.0
     strength = float(strength)
 
-    # Pixel indices run 0..nx-1 across and 0..nz-1 down; the map centre line sits at
-    # (nx-1)/2, so the mirror of column c is (nx-1) - c (and likewise for rows).
-    centres = [(float(x), float(y))]
-    if symmetry in ("ew", "ew_ns"):
-        centres.append(((nx - 1) - float(x), float(y)))
-    if symmetry in ("ns", "ew_ns"):
-        centres.append((float(x), (nz - 1) - float(y)))
-    if symmetry == "ew_ns":
-        centres.append(((nx - 1) - float(x), (nz - 1) - float(y)))
+    nz, nx = hm.shape
+    mask = np.zeros((nz, nx), bool)
+    for cx, cy in _mirrors(x, y, symmetry, nx, nz):
+        mask |= _footprint(hm, cx, cy, radius, shape)
+    return _paint(hm, mask, mode, strength, limit)
 
-    sigma = float(radius) / 3.0
-    r = int(np.ceil(radius)) + 1
-    for cx, cy in centres:
-        x0 = max(0, int(np.floor(cx - r)))
-        x1 = min(nx, int(np.ceil(cx + r)) + 1)
-        y0 = max(0, int(np.floor(cy - r)))
-        y1 = min(nz, int(np.ceil(cy + r)) + 1)
-        yy, xx = np.mgrid[y0:y1, x0:x1].astype(np.float64)
-        d2 = (xx - cx) ** 2 + (yy - cy) ** 2
-        w = np.exp(-0.5 * d2 / (sigma * sigma))
-        w *= d2 <= float(radius) * float(radius)   # clip the tail cleanly at the rim
-        out[y0:y1, x0:x1] += sign * strength * w
+
+def apply_ramp(hm, x1, y1, x2, y2, width, start_height, end_height, symmetry="ew_ns"):
+    """Lay a straight ramp of ``width`` pixels from A(x1,y1) to B(x2,y2) and mirror it.
+
+    Heights along the line interpolate linearly (``numpy.linspace``) from ``start_height``
+    to ``end_height`` in elmos. The strip has a hard edge at half-width ``width/2``; cells
+    beyond it are untouched. A degenerate segment (A == B) paints a disc of ``width``
+    around the point at ``start_height``. Returns a NEW heightmap with the same shape and
+    dtype as ``hm``; the input is never modified.
+    """
+    hm = np.asarray(hm)
+    if hm.ndim != 2:
+        raise ValueError("hm must be a 2D array")
+    if symmetry not in ("none", "ew", "ns", "ew_ns"):
+        raise ValueError(f"symmetry must be one of none/ew/ns/ew_ns, got {symmetry!r}")
+    width = float(width)
+    if width <= 0:
+        raise ValueError("width must be > 0")
+
+    nz, nx = hm.shape
+    start_height, end_height = float(start_height), float(end_height)
+    half = 0.5 * width
+    out = hm.astype(np.float64, copy=True)
+    segments = zip(_mirrors(x1, y1, symmetry, nx, nz), _mirrors(x2, y2, symmetry, nx, nz))
+    for (ax, ay), (bx, by) in segments:
+        dx, dz = bx - ax, by - ay
+        x = np.arange(nx)[None, :] - ax
+        z = np.arange(nz)[:, None] - ay
+        if dx == 0.0 and dz == 0.0:                          # degenerate: a disc at A
+            uc = np.zeros((nz, nx))
+            d = np.hypot(x, z)
+            heights = np.full((nz, nx), start_height)
+        else:
+            seg2 = dx * dx + dz * dz
+            uc = np.clip((x * dx + z * dz) / seg2, 0.0, 1.0)
+            d = np.hypot(x - uc * dx, z - uc * dz)
+            steps = max(int(np.ceil(np.hypot(dx, dz))), 1) + 1
+            profile = np.linspace(start_height, end_height, steps)
+            heights = profile[np.clip(np.round(uc * (steps - 1)).astype(np.intp), 0, steps - 1)]
+        strip = d <= half
+        out[strip] = heights[strip]
     return out.astype(hm.dtype)
+
+
+def apply_brush_line(hm, x1, y1, x2, y2, radius, strength, mode="raise", symmetry="ew_ns",
+                     shape="circle", limit=None):
+    """Apply a hard-edged brush along the straight segment A(x1,y1)->B(x2,y2) and mirror it.
+
+    Same contract as :func:`apply_brush`, except the brush is stamped at evenly spaced
+    samples along the segment (one dab every ``radius`` pixels so the footprint stays
+    continuous) instead of at a single point. A degenerate segment (A == B) paints a
+    single dab. Returns a NEW heightmap with the same shape and dtype as ``hm``; the
+    input is never modified.
+    """
+    hm = np.asarray(hm)
+    if hm.ndim != 2:
+        raise ValueError("hm must be a 2D array")
+    if mode not in ("raise", "lower", "smooth"):
+        raise ValueError(f"mode must be 'raise', 'lower' or 'smooth', got {mode!r}")
+    if shape not in ("circle", "square"):
+        raise ValueError(f"shape must be 'circle' or 'square', got {shape!r}")
+    if symmetry not in ("none", "ew", "ns", "ew_ns"):
+        raise ValueError(f"symmetry must be one of none/ew/ns/ew_ns, got {symmetry!r}")
+    radius = float(radius)
+    if radius <= 0:
+        raise ValueError("radius must be > 0")
+    strength = float(strength)
+
+    nz, nx = hm.shape
+    mask = np.zeros((nz, nx), bool)
+    step = max(0.5 * radius, 0.5)
+    segments = zip(_mirrors(x1, y1, symmetry, nx, nz), _mirrors(x2, y2, symmetry, nx, nz))
+    for (ax, ay), (bx, by) in segments:
+        length = float(np.hypot(bx - ax, by - ay))
+        steps = max(2, int(np.ceil(length / step)) + 1) if length > 0.0 else 1
+        for t in np.linspace(0.0, 1.0, steps):
+            mask |= _footprint(hm, ax + t * (bx - ax), ay + t * (by - ay), radius, shape)
+    return _paint(hm, mask, mode, strength, limit)
 

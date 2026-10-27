@@ -73,6 +73,7 @@ function editorAfterPreview(m, seed) {
   ED.sel = null;
   edShowProblems(m);
   edUpdateUi();
+  if (typeof brushAfterPreview === "function") brushAfterPreview();
 }
 
 // ------------------------------------------------------------------ sending edits
@@ -375,7 +376,11 @@ function drawEditor() {
 }
 
 // ------------------------------------------------------------------ toolbar and keys
-$("ed-toggle").onclick = () => { ED.on = !ED.on; ED.drag = ED.hover = null; edUpdateUi(); draw(); };
+$("ed-toggle").onclick = () => {
+  ED.on = !ED.on; ED.drag = ED.hover = null;
+  if (ED.on && typeof brSetOn === "function") brSetOn(false);
+  edUpdateUi(); draw();
+};
 for (const b of document.querySelectorAll("#ed-extra [data-tool]")) b.onclick = () => { ED.tool = b.dataset.tool; edUpdateUi(); };
 $("ed-undo").onclick = edUndo;
 $("ed-redo").onclick = edRedo;
@@ -389,8 +394,17 @@ document.addEventListener("keydown", (e) => {
   if (e.target.matches("input, textarea") || !S.map) return;
   if ((e.ctrlKey || e.metaKey) && !e.altKey) {
     const k = e.key.toLowerCase();
-    if (k === "z" && !e.shiftKey) { e.preventDefault(); edUndo(); }
-    else if (k === "y" || (k === "z" && e.shiftKey)) { e.preventDefault(); edRedo(); }
+    const terrain = (typeof BR !== "undefined" && BR.on) || (typeof RA !== "undefined" && RA.on);
+    if (k === "z" && !e.shiftKey) {
+      e.preventDefault();
+      if (terrain && typeof brUndo === "function") brUndo();
+      else edUndo();
+    }
+    else if (k === "y" || (k === "z" && e.shiftKey)) {
+      e.preventDefault();
+      if (terrain && typeof brRedo === "function") brRedo();
+      else edRedo();
+    }
     return;
   }
   if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -410,7 +424,7 @@ async function edSave() {
     app_version: S.info.version,
   });
   try {
-    const r = await api("project_save", { data });
+    const r = await api("project_save", { id: S.map.id, data });
     toastAction("Project saved: " + r.path, "Open folder", () => api("open", { path: r.path }).catch((e) => toast(e.message)));
   } catch (e) { toast(e.message); }
 }
@@ -420,7 +434,12 @@ async function edOpen(file) {
 }
 
 async function edLoad(req) {
-  try { applyProject(await api("project_load", req)); } catch (e) { toast(e.message); }
+  try {
+    applyProject(await api("project_load", req));
+  } catch (e) {
+    console.error("[applyProject] project_load failed:", e && e.message ? e.message : e, e);
+    toast(e.message);
+  }
 }
 
 function applyProject(r) {
@@ -437,7 +456,20 @@ function applyProject(r) {
   clearTimeout(pvTimer);
   $("seed").value = p.seed;
   S.titleEdited[p.template] = !!p.title;
-  runPreview(true).then(() => { if (p.title) $("title").value = p.title; });
+  const done = () => { if (p.title) $("title").value = p.title; };
+  if (r.design) {
+    // The server already rebuilt the design from the saved heightmap + texture (Forge Editor).
+    const seq = ++S.seq;
+    const veilT = setTimeout(() => $("veil").classList.add("on"), 120);
+    S.busy = true;
+    updateBuildButton();
+    showDesign(r.design, p.seed, true, seq).then(done).catch((e) => toast(e.message)).finally(() => {
+      clearTimeout(veilT);
+      if (seq === S.seq) { $("veil").classList.remove("on"); S.busy = false; updateBuildButton(); }
+    });
+  } else {
+    runPreview(true).then(done);
+  }
 }
 
 $("ed-save").onclick = () => S.map && edSave();

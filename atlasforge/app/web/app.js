@@ -14,7 +14,8 @@ const S = {
   map: null,           // last preview response
   seq: 0,
   busy: false,
-  img: { relief: null, reliefSize: 0, hazard: null, gates: null, reach: {} },
+  img: { relief: null, reliefSize: 0, hazard: null, gates: null, reach: {}, heightmap: null },
+  showHeightmap: false, // while the terrain tools are on, show the grayscale heightmap instead of the texture
   grid: null,          // { nx, nz, height: Int16Array, cells: Uint8Array }
   layers: { mexes: true, geos: true, starts: true, boxes: true, gates: true, hazard: true, grid: false, features: true },
   route: "",
@@ -25,6 +26,7 @@ const S = {
   edits: [],           // manual edits of the current map (see atlasforge/edits.py)
   redo: [],
   symmetry: true,
+  brushVer: 0,         // cache-busting version for height-dependent layers after a brush stroke
 };
 
 // ------------------------------------------------------------------ helpers
@@ -40,13 +42,18 @@ async function api(path, body) {
   if (!r.ok) {
     let msg = r.statusText;
     try { msg = (await r.json()).error || msg; } catch (e) { /* not json */ }
+    console.error("[api] /api/" + path + " failed:", msg);
     throw new Error(msg);
   }
   if (ct.startsWith("application/json")) return r.json();
   if (ct.startsWith("image/")) return createImageBitmap(await r.blob());
   return r.arrayBuffer();
 }
-const layerUrl = (name, size) => `layer/${S.map.id}/${name}` + (size ? `?size=${size}` : "");
+const layerUrl = (name, size) => {
+  let q = size ? `?size=${size}` : "";
+  if (S.brushVer) q += (q ? "&" : "?") + `v=${S.brushVer}`;
+  return `layer/${S.map.id}/${name}` + q;
+};
 
 function toast(msg, ms = 5000) {
   const t = $("toast");
@@ -418,36 +425,9 @@ async function runPreview(refit) {
   S.busy = true;
   updateBuildButton();
   try {
-    const prev = S.map;
     const m = await api("preview", { template: S.tpl.id, values: S.values[S.tpl.id], seed, edits: S.edits, symmetry: S.symmetry });
     if (seq !== S.seq) return;                                 // a newer preview is on its way
-    const [relief, height, cells, hazard, gates] = await Promise.all([
-      api(`layer/${m.id}/relief?size=1024`),
-      api(`layer/${m.id}/height`),
-      api(`layer/${m.id}/cells`),
-      m.has_hazard ? api(`layer/${m.id}/hazard`) : null,
-      m.gates.length ? api(`layer/${m.id}/gates`) : null,
-    ]);
-    if (seq !== S.seq) return;
-    S.map = m;
-    editorAfterPreview(m, seed);
-    S.img = { relief, reliefSize: 1024, hazard, gates, reach: {} };
-    S.grid = { nx: m.grid[0], nz: m.grid[1], height: new Int16Array(height), cells: new Uint8Array(cells) };
-    $("empty").classList.add("hidden");
-    $("readout").innerHTML = "Scroll to zoom, drag to move";
-    const sameFrame = prev && prev.W === m.W && prev.H === m.H && !refit;
-    if (!sameFrame) fit();
-    if (S.route) await loadRoute(S.route);
-    $("route-ships").classList.toggle("hidden", m.movement_profile !== "naval");
-    if (S.route === "ships" && m.movement_profile !== "naval") { S.route = ""; syncToolbar(); }
-    renderReport();
-    renderFacts();
-    updateLegend();
-    if (!S.titleEdited[S.tpl.id]) $("title").value = m.title;
-    refreshVersions();
-    draw();
-    maybeHiRes();
-    if (!runPreview.logged) { runPreview.logged = true; clientLog(`first preview shown (${m.template}, ${m.seconds} s)`); }
+    await showDesign(m, seed, refit, seq);
   } catch (e) {
     if (seq === S.seq) toast(e.message);
   } finally {
@@ -458,6 +438,39 @@ async function runPreview(refit) {
       updateBuildButton();
     }
   }
+}
+
+// Show a finished design in the UI (fetch its layers and redraw). Used after /api/preview and when a
+// saved project is re-opened (the server has already rebuilt the design from the saved heightmap).
+async function showDesign(m, seed, refit, seq) {
+  const [relief, height, cells, hazard, gates] = await Promise.all([
+    api(`layer/${m.id}/relief?size=1024`),
+    api(`layer/${m.id}/height`),
+    api(`layer/${m.id}/cells`),
+    m.has_hazard ? api(`layer/${m.id}/hazard`) : null,
+    m.gates.length ? api(`layer/${m.id}/gates`) : null,
+  ]);
+  if (seq !== S.seq) return;
+  const prev = S.map;
+  S.map = m;
+  editorAfterPreview(m, seed);
+  S.img = { relief, reliefSize: 1024, hazard, gates, reach: {}, heightmap: null };
+  S.grid = { nx: m.grid[0], nz: m.grid[1], height: new Int16Array(height), cells: new Uint8Array(cells) };
+  $("empty").classList.add("hidden");
+  $("readout").innerHTML = "Scroll to zoom, drag to move";
+  const sameFrame = prev && prev.W === m.W && prev.H === m.H && !refit;
+  if (!sameFrame) fit();
+  if (S.route) await loadRoute(S.route);
+  $("route-ships").classList.toggle("hidden", m.movement_profile !== "naval");
+  if (S.route === "ships" && m.movement_profile !== "naval") { S.route = ""; syncToolbar(); }
+  renderReport();
+  renderFacts();
+  updateLegend();
+  if (!S.titleEdited[S.tpl.id]) $("title").value = m.title;
+  refreshVersions();
+  draw();
+  maybeHiRes();
+  if (!showDesign.logged) { showDesign.logged = true; clientLog(`first preview shown (${m.template}, ${m.seconds} s)`); }
 }
 
 function renderReport() {
@@ -582,7 +595,8 @@ function paint() {
   ctx.fillStyle = "#08090b";
   ctx.fillRect(0, 0, r.width, r.height);
   const m = S.map;
-  if (!m || !S.img.relief) return;
+  const base = S.showHeightmap && S.img.heightmap ? S.img.heightmap : S.img.relief;
+  if (!m || !base) return;
   const s = S.view.s;
   const [ox, oy] = toScreen(0, 0);
   const w = m.W * s, h = m.H * s;
@@ -595,7 +609,7 @@ function paint() {
   ctx.restore();
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(S.img.relief, ox, oy, w, h);
+  ctx.drawImage(base, ox, oy, w, h);
 
   if (S.route && S.img.reach[S.route]) ctx.drawImage(S.img.reach[S.route], ox, oy, w, h);
   if (S.layers.hazard && S.img.hazard) ctx.drawImage(S.img.hazard, ox, oy, w, h);
@@ -609,6 +623,7 @@ function paint() {
   for (const k of m.marks) drawMark(k);
   if (S.layers.starts) drawStarts();
   drawEditor();
+  if (typeof drawBrush === "function") drawBrush();
   ctx.strokeStyle = "rgba(255,255,255,.08)";
   ctx.lineWidth = 1;
   ctx.strokeRect(ox + 0.5, oy + 0.5, w - 1, h - 1);
@@ -823,7 +838,7 @@ cv.addEventListener("dblclick", (e) => {
 
 function readout(e) {
   const m = S.map, g = S.grid;
-  if (!m || !g) return;
+  if (!m || !g || !S.info) return;
   const r = cv.getBoundingClientRect();
   const sx = e.clientX - r.left, sy = e.clientY - r.top;
   const [x, z] = toMap(sx, sy);
@@ -831,13 +846,20 @@ function readout(e) {
   const ix = Math.min(g.nx - 1, Math.round(x / 8)), iz = Math.min(g.nz - 1, Math.round(z / 8));
   const i = iz * g.nx + ix;
   const bits = g.cells[i];
-  let html = `<span>x <b>${Math.round(x)}</b> z <b>${Math.round(z)}</b></span><span>height <b>${g.height[i]}</b></span>`;
+  const cls = (c, ok) => {
+    const name = CLASS_NAMES[c] || c;
+    return `<span class="cls ${ok ? "y" : ""}" title="${esc(name)}: ${ok ? "passable" : "blocked"}">${ok ? "✓" : "✗"}${name}</span>`;
+  };
+  let html = `<span>x <b>${Math.round(x)}</b> z <b>${Math.round(z)}</b></span><span>height <b>${g.height[i]}</b> el</span>`;
   if (bits & 64) html += `<span class="cls lava">Lava - nobody survives</span>`;
   else {
-    html += S.info.classes.map((c, k) => `<span class="cls ${(bits >> k) & 1 ? "y" : ""}">${CLASS_NAMES[c]}</span>`).join("");
+    html += (S.info.classes || []).map((c, k) => cls(c, (bits >> k) & 1)).join("");
     if (bits & 128) html += `<span class="cls lava">Damaging ground</span>`;
     if (bits & 32) html += `<span class="cls ev">${esc(m.event_label || "event zone")}</span>`;
-    if (m.movement_profile === "naval") html += `<span class="cls ${g.height[i] < -15 ? "y" : ""}">Ships</span>`;
+    if (m.movement_profile === "naval") {
+      const ok = g.height[i] < -15;
+      html += `<span class="cls ${ok ? "y" : ""}" title="Ships: ${ok ? "passable" : "blocked"}">${ok ? "✓" : "✗"}Ships</span>`;
+    }
   }
   let best = null, bd = 1e9;
   for (const mx of m.mexes) {

@@ -14,9 +14,13 @@ def test_template_designs_and_checks(tid):
     d = forge.make(tid, SMALL.get(tid, {}), seed=3, log=lambda *a: None)
     ok, lines = forge.check(d)
     assert ok, "\n".join(lines)
-    assert d.mexes and d.starts and len(d.teams) >= 2
+    assert d.starts and len(d.teams) >= 2
+    if tid != "editor":                                  # the blank editor canvas starts with no metal spots
+        assert d.mexes
     img = forge.preview(d, size=256)
-    assert img.size == (256, 256)
+    # Non-square maps (the 16x4 editor/AI corridor) keep their aspect ratio in the preview.
+    expected_h = max(1, round(256 * (d.hm.shape[0] - 1) / (d.hm.shape[1] - 1)))
+    assert img.size == (256, expected_h)
     for path, code in d.extra_files.items():
         assert path.startswith(("mapconfig/", "LuaRules/Gadgets/", "features/", "objects3d/", "unittextures/")), path
 
@@ -54,7 +58,6 @@ def test_build_small_template(tmp_path):
     info = forge.build(d, outdir=str(tmp_path), config=ForgeConfig(author="Test"), log=lambda *a: None)
     assert info["name"] == "Forge Chokepoint Front v1"
     assert info["template"] == "chokepoint"
-    from atlasforge import watermark                       # hidden mark is in every built map
+    from atlasforge import watermark                       # no hidden mark on builds anymore
     r = watermark.verify(info["path"])
-    assert r["forge"] and r["confidence"] == "certain"
-    assert r["payload"]["template"] == "chokepoint" and r["payload"]["seed"] == 1
+    assert not r["forge"] and r["payload"] is None

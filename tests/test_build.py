@@ -76,7 +76,7 @@ def test_wall_blocks_tanks_and_becomes_lava_cliff():
 
 def test_config_names():
     assert ForgeConfig(author="A").map_name("Ridge", 2) == "Forge Ridge v2"     # prefix is fixed
-    assert ForgeConfig().describe("Hills.") == "Hills. Made with Atlas Map Forge."
+    assert ForgeConfig().describe("Hills.") == "Hills."
     with pytest.raises(ValueError):
         ForgeConfig().require_author()
     with pytest.raises(ValueError):

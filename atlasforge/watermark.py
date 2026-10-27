@@ -85,7 +85,7 @@ def embed(hm16, hmin, hmax, version, template=None, seed=0, build_id=None, today
     h = hm16.astype(np.int32)
     unit = (hmax - hmin) / 65535.0
     amp = max(1, int(round(PATTERN_ELMOS / unit)))
-    h = np.clip(h + amp * _pattern(h.shape), 0, 65535)
+    h = np.clip(h + amp * _pattern(h.shape).astype(np.int32), 0, 65535)
     day = ((today or datetime.date.today()) - EPOCH).days
     if build_id is None:
         build_id = int.from_bytes(os.urandom(4), "little")

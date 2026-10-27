@@ -83,8 +83,39 @@
         <button data-route="hovers">Hovers</button>
         <button data-route="ships" class="hidden" id="route-ships">Ships</button>
       </div>
+      <div class="tgroup hidden" id="brush-tools">
+        <button id="brush-mode" title="Paint the terrain: drag with the left mouse button (right button always lowers)">Terrain Brush</button>
+        <span class="brush-extra hidden" id="brush-extra">
+          <button class="br-mode on" data-br-mode="raise" title="Raise the terrain (LMB)">Raise</button>
+          <button class="br-mode" data-br-mode="lower" title="Lower the terrain (LMB)">Lower</button>
+          <button class="br-mode" data-br-mode="smooth" title="Smooth out sharp cliffs (LMB)">Smooth</button>
+          <span class="tlabel">Shape</span>
+          <button class="br-shape on" data-br-shape="circle" title="Round brush">Circle</button>
+          <button class="br-shape" data-br-shape="square" title="Square brush">Square</button>
+          <span class="tlabel">Radius</span>
+          <input type="range" id="brush-radius" min="5" max="300" step="1" value="30" title="Brush radius in heightmap pixels">
+          <span class="brush-val" id="brush-radius-val">30</span>
+          <span class="tlabel" id="brush-strength-label">Strength</span>
+          <input type="range" id="brush-strength" min="1" max="400" step="1" value="5" title="Height added or removed per dab (elmos); for Smooth: smoothing passes">
+          <span class="brush-val" id="brush-strength-val">5</span>
+          <span class="tlabel" id="brush-limit-label">Max H</span>
+          <input type="number" id="brush-limit" min="-5000" max="5000" step="10" placeholder="none" title="Raise: never paint above this height (elmos); empty = no limit">
+        </span>
+        <button id="ramp-mode" title="Ramp tool: click the start point, then the end point">Ramp Tool</button>
+        <span class="brush-extra hidden" id="ramp-extra">
+          <span class="tlabel">Width</span>
+          <input type="range" id="ramp-width" min="2" max="200" step="1" value="24" title="Ramp width in heightmap pixels">
+          <span class="brush-val" id="ramp-width-val">24</span>
+          <span class="tlabel">From</span>
+          <input type="number" id="ramp-start" step="10" value="0" title="Height at the ramp start (elmos)">
+          <span class="tlabel">To</span>
+          <input type="number" id="ramp-end" step="10" value="100" title="Height at the ramp end (elmos)">
+        </span>
+        <button id="br-undo" title="Undo the last brush stroke or ramp (Ctrl+Z)">Undo</button>
+        <button id="br-redo" title="Redo (Ctrl+Y)">Redo</button>
+      </div>
       <div class="tgroup" id="edit-tools">
-        <button id="ed-toggle" title="Edit metal spots, geovents and start points (E)">Edit</button>
+        <button id="ed-toggle" title="Place objects: metal spots, geovents and start points (E)">Place Objects</button>
         <span class="ed-only hidden" id="ed-extra">
           <button data-tool="move" class="on" title="Move: drag a spot (V)">Move</button>
           <button data-tool="mex" title="Add a metal spot: click (1)">Metal +</button>
@@ -237,5 +268,6 @@
 <div class="toast hidden" id="toast"></div>
 <script src="app.js"></script>
 <script src="editor.js"></script>
+<script src="brush.js"></script>
 </body>
 </html>

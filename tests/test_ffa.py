@@ -65,7 +65,6 @@ def test_ffa_general_settings():
 
 
 def test_ffa_build(tmp_path):
-    from atlasforge import watermark
     from atlasforge.config import ForgeConfig
     d = forge.make("ffa_ring", dict(FAST, players=4, size=16), seed=1, **QUIET)
     info = forge.build(d, outdir=str(tmp_path), config=ForgeConfig(author="Test"), log=lambda *a: None)
@@ -75,5 +74,5 @@ def test_ffa_build(tmp_path):
         sb = z.read("mapconfig/map_startboxes.lua").decode()
     assert mi.count("startpos") == 4
     assert len(startboxes(sb)) == 4
-    r = watermark.verify(info["path"])
-    assert r["forge"] and r["payload"]["template"] == "ffa_ring"
+    from atlasforge import watermark                       # no hidden mark on builds anymore
+    assert not watermark.verify(info["path"])["forge"]

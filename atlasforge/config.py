@@ -13,7 +13,7 @@ TOOL_NAME = "Atlas Map Forge"
 SUPPORT_URL = "https://ko-fi.com/scuide"
 SUPPORT_TEXT = "Enjoying Atlas Map Forge? Support me on Ko-fi to help development: " + SUPPORT_URL
 PREFIX = "Forge"             # every map name: "Forge <title> v<version>"
-BADGE = "forge"              # FORGE badge in the lobby map picture
+BADGE = "none"               # no badge on built maps
 
 
 def _config_dir():
@@ -32,8 +32,7 @@ def cache_dir():
 
 @dataclass
 class ForgeConfig:
-    """User settings. Only the author name is up to the user; every Forge map carries the "Forge" name
-    prefix, the FORGE badge in the lobby map picture and the "Made with Atlas Map Forge." line."""
+    """User settings. The author name is up to the user; every map carries the "Forge" name prefix."""
     author: str = ""                 # shown on the map page (mapinfo author); required to build maps
     zerok: str = ""                  # Zero-K folder for installing maps; empty = find automatically
     outdir: str = ""                 # where built maps are written; empty = default_outdir()
@@ -48,7 +47,7 @@ class ForgeConfig:
         return f"{PREFIX} {title} v{version}"
 
     def describe(self, text):
-        return f"{text} Made with {TOOL_NAME}."
+        return text
 
     def validate(self):
         a = self.author

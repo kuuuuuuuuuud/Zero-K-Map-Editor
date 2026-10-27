@@ -8,10 +8,8 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 from . import SQ, TEX_PER_SQ, TILE
-from . import __version__, watermark
-from .badge import draw_badge
-from .config import ForgeConfig, TOOL_NAME
-from .formats import (dds_bytes, mapinfo_lua, metal_layout_lua, minimap_dxt, png_bytes, smt_header,
+from .config import ForgeConfig
+from .formats import (mapinfo_lua, metal_layout_lua, minimap_dxt, png_bytes, smt_header,
                       startboxes_lua, tiles_from_strip, write_smf)
 from .features import grass_map, place_trees
 from .render import (PAINT_LAYERS, NoiseBank, build_texture_fields, crack_field, detail_bmp, material_files,
@@ -66,7 +64,7 @@ def build_archive(name, hm, sym, starts, mexes, geos, biome, rng, outdir, desc, 
                   random_trees=True, preview_marks=None, preview_start_colors=None, paint=None, workers=None,
                   keep_clear=None, diffuse=None, water=None):
     """Build <outdir>/<name>.sdz. Returns an info dict.
-    config: ForgeConfig (author, badge); desc is used as given (call config.describe() before if wanted).
+    config: ForgeConfig (author); desc is used as given.
     paint: optional dict of 0..1 fields (heightmap resolution) for PAINT_LAYERS.
     extra_files: {archive path: str|bytes} e.g. map gadgets and their config.
     keep_clear: bool grid without random trees (e.g. carved ramps).
@@ -80,12 +78,16 @@ def build_archive(name, hm, sym, starts, mexes, geos, biome, rng, outdir, desc, 
     if nx % 128 or nz % 128:
         raise ValueError("map size must be a multiple of 2 Spring units (128 heightmap squares)")
     ux, uz = nx // 64, nz // 64
-    hmin = float(min(hm.min(), -1.0)) - 1
-    hmax = float(hm.max()) + 1
+    # mapinfo.lua and the SMF header must report the ACTUAL height range of the current
+    # heightmap so the engine scales the 16-bit heights correctly: a painted 250-elmo hill
+    # must read maxheight = 250.0, not a hardcoded default. Flat maps keep a tiny non-zero
+    # span so the SMF height scale stays valid.
+    hmin = float(hm.min())
+    hmax = float(hm.max())
+    if hmax <= hmin:
+        hmax = hmin + 1.0
     water_h = 0.0
     hm16 = np.clip(np.round((hm - hmin) / (hmax - hmin) * 65535), 0, 65535).astype(np.uint16)
-    hm16 = watermark.embed(hm16, hmin, hmax, __version__, (extra or {}).get("template") or "procedural",
-                           int((extra or {}).get("seed") or 0))                 # hidden Forge mark
     hmq = hm16.astype(np.float32) / 65535 * (hmax - hmin) + hmin          # continue with the quantised height
 
     trees = place_trees(hmq, sym, mexes, geos, starts, biome, rng, water_h, keep_clear) if random_trees else []
@@ -153,8 +155,7 @@ def build_archive(name, hm, sym, starts, mexes, geos, biome, rng, outdir, desc, 
             if pool:
                 pool.close(); pool.join()
         mini_clean = np.asarray(Image.fromarray(np.concatenate(mini_rows, 0)).resize((1024, 1024), Image.LANCZOS))
-    badge = cfg.badge if cfg.badge != "none" else None
-    mini_img = draw_badge(mini_clean, badge) if badge else mini_clean
+    mini_img = mini_clean
     minimap = minimap_dxt(mini_img)
     assert len(minimap) == 699048
 
@@ -191,12 +192,8 @@ def build_archive(name, hm, sym, starts, mexes, geos, biome, rng, outdir, desc, 
             shading_name = "grass_shading.png"
             z.writestr("maps/" + shading_name, png_bytes(np.asarray(Image.fromarray(gs.astype(np.uint8)).resize((512, 512), Image.BOX))))
         z.writestr("mapinfo.lua", mapinfo_lua(name, desc, cfg.author, hmin, hmax, smt_name, starts, biome, water_h,
-                                              fname + ".smf", minimap_tex="minimap_ingame.dds" if badge else None,
-                                              emission_tex=emis_name, tool=TOOL_NAME, sky_box=sky_name,
+                                              fname + ".smf", emission_tex=emis_name, sky_box=sky_name,
                                               grass_shading=shading_name, water=water))
-        if badge:
-            # DDS is loaded vertically flipped (OpenGL convention), the SMF minimap is not: write upside down
-            z.writestr("maps/minimap_ingame.dds", dds_bytes(np.ascontiguousarray(mini_clean[::-1]), "DXT1"))
         z.write(smf_path, f"maps/{fname}.smf")
         z.write(smt_path, f"maps/{smt_name}", compresslevel=1)
         z.writestr("maps/detailtex.bmp", detail_bmp(rng))

@@ -122,12 +122,22 @@ def check(design):
 # ----------------------------------------------------------------------------- quick preview
 def _relief_colors(hm, biome, paint, size):
     """Fast stylised render of the heightmap (no texture pass): biome colours, slope rock, water,
-    paint layers and hill shading."""
-    n = hm.shape[0]
-    zoom = size / (n - 1)
-    h = ndimage.zoom(hm, zoom, order=1)[:size, :size] if zoom != 1 else hm[:size, :size]
-    step = SQ / zoom
-    gz, gx = np.gradient(h, step)
+    paint layers and hill shading.
+
+    ``size`` is the output WIDTH in pixels; the output HEIGHT follows the map's aspect ratio so
+    non-square maps (e.g. the 16x4 editor/AI corridor) are shown undistorted instead of a square
+    crop of the terrain being stretched across the full map width."""
+    nz, nx = hm.shape
+    nz -= 1                                                 # heightmap squares per axis
+    nx -= 1
+    out_w = size
+    out_h = max(1, round(size * nz / nx))
+    zoom_z = out_h / nz                                     # output pixels per heightmap square
+    zoom_x = out_w / nx
+    h = ndimage.zoom(hm, (zoom_z, zoom_x), order=1)[:out_h, :out_w]
+    step_z = SQ / zoom_z                                    # elmos per output pixel
+    step_x = SQ / zoom_x
+    gz, gx = np.gradient(h, step_z, step_x)
     slope = np.degrees(np.arctan(np.hypot(gx, gz)))
     C = {k: np.array(biome[k], np.float32) for k in ("bed", "shore", "low", "mid", "high", "rock", "cliff", "peak")}
     t = np.clip(h / 340.0, 0, 1.2)
@@ -143,14 +153,15 @@ def _relief_colors(hm, biome, paint, size):
             a = paint.get(k)
             if a is None:
                 return None
-            return np.clip(ndimage.zoom(a.astype(np.float32), zoom, order=1)[:size, :size], 0, 1)[..., None]
+            return np.clip(ndimage.zoom(a.astype(np.float32), (zoom_z, zoom_x), order=1)[:out_h, :out_w],
+                           0, 1)[..., None]
         for k, c in (("concrete", (168, 166, 160)), ("ice", (200, 218, 234)), ("scorch", (58, 44, 38)),
                      ("lava", (90, 34, 18)), ("molten", (255, 140, 30))):
             a = layer(k)
             if a is not None:
                 col = col + (np.array(c, np.float32) - col) * a * (0.85 if k == "scorch" else 1.0)
         if paint.get("lava") is not None:          # glowing veins so lava reads as lava
-            yy, xx = np.mgrid[0:size, 0:size].astype(np.float32)
+            yy, xx = np.mgrid[0:out_h, 0:out_w].astype(np.float32)
             veins = (np.abs(np.sin(xx * 0.21 + np.sin(yy * 0.07) * 3) * np.sin(yy * 0.19 + np.sin(xx * 0.05) * 3)) < 0.12)
             col = col + (np.array([255, 120, 30], np.float32) - col) * (veins[..., None] * layer("lava") * 0.8)
     water = h < 0
@@ -158,7 +169,8 @@ def _relief_colors(hm, biome, paint, size):
         col = np.where(water[..., None], np.array([12, 12, 20], np.float32), col)
         water &= False
     if paint and paint.get("lava") is not None:
-        water &= np.clip(ndimage.zoom(paint["lava"].astype(np.float32), zoom, order=1)[:size, :size], 0, 1) < 0.5
+        water &= np.clip(ndimage.zoom(paint["lava"].astype(np.float32), (zoom_z, zoom_x), order=1)[:out_h, :out_w],
+                         0, 1) < 0.5
     col = np.where(water[..., None], col * 0.55 + np.array([20, 60, 110], np.float32) * 0.45, col)
     # hill shading with vertical exaggeration
     ex = 2.2
@@ -179,13 +191,15 @@ def preview(design, size=1024, overlays=True):
     if not overlays:
         return img
     d = ImageDraw.Draw(img, "RGBA")
+    out_w, out_h = img.size
     W = (design.hm.shape[1] - 1) * SQ
     H = (design.hm.shape[0] - 1) * SQ
-    sx, sz = size / W, size / H
+    sx, sz = out_w / W, out_h / H
     if design.hazard is not None and design.hazard.any():
         edge = design.hazard & ~ndimage.binary_erosion(design.hazard, iterations=2)
-        e = ndimage.zoom(edge.astype(np.float32), size / (design.hazard.shape[0] - 1), order=0)[:size, :size] > 0.5
-        ov = np.zeros((size, size, 4), np.uint8); ov[e] = (255, 60, 30, 200)
+        hz, hx = design.hazard.shape
+        e = ndimage.zoom(edge.astype(np.float32), (out_h / (hz - 1), out_w / (hx - 1)), order=0)[:out_h, :out_w] > 0.5
+        ov = np.zeros((out_h, out_w, 4), np.uint8); ov[e] = (255, 60, 30, 200)
         img.alpha_composite(Image.fromarray(ov)) if img.mode == "RGBA" else img.paste(
             Image.fromarray(ov[..., :3]), mask=Image.fromarray(ov[..., 3]))
         d = ImageDraw.Draw(img, "RGBA")

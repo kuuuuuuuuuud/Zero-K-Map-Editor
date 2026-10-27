@@ -91,6 +91,9 @@ def validate(data, templates=None) -> dict:
     validate_edits(data.get("edits"))
     if "title" in data and not isinstance(data["title"], str):
         raise ValueError("title: expected a string")
+    for key in ("heightmap_path", "texture_path"):
+        if key in data and data[key] is not None and not isinstance(data[key], str):
+            raise ValueError(f"{key}: expected a string")
     return data
 
 
