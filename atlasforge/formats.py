@@ -1,5 +1,6 @@
 """Engine file formats: DXT1/DDS, SMT tiles, SMF, PNG/BMP and the Lua config files of a Zero-K map."""
 import io
+import re
 import struct
 
 import numpy as np
@@ -156,8 +157,79 @@ def lua_tuple(t):
 
 
 def lua_string(s):
-    """Quote a string for Lua (double quotes)."""
-    return '"' + str(s).replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ") + '"'
+    """Quote a string for Lua (double quotes).
+
+    Escapes backslashes and double quotes and flattens newlines, tabs and every
+    other control character to a space, so a user-supplied description, author or
+    title can never break out of its string literal. Zero-K's upload server parses
+    mapinfo.lua with Neo.IronLua, which is stricter than standard Lua about some
+    inputs, so keep the emitted strings as plain as possible.
+    """
+    out = []
+    for ch in str(s):
+        if ch == "\\":
+            out.append("\\\\")
+        elif ch == '"':
+            out.append('\\"')
+        elif ch in "\r\n\t":
+            out.append(" ")
+        elif ord(ch) < 32 or ord(ch) == 127:
+            out.append(" ")
+        else:
+            out.append(ch)
+    return '"' + "".join(out) + '"'
+
+
+def lua_syntax_check(src):
+    """Structural sanity check for generated Lua.
+
+    Strips comments and string literals, then verifies that the remaining
+    brackets are balanced and that no Python literals (True/False/None) leaked
+    into the file. Cheap but catches the class of errors that break parsers
+    such as Neo.IronLua (e.g. a stray ']' where a '}' is expected).
+
+    Returns (ok: bool, message: str).
+    """
+    n = len(src)
+    i = 0
+    clean = []
+    while i < n:
+        ch = src[i]
+        if ch == "-" and i + 1 < n and src[i + 1] == "-":
+            i += 2
+            if i + 1 < n and src[i:i + 2] == "[[":
+                i += 2
+                while i + 1 < n and src[i:i + 2] != "]]":
+                    i += 1
+                i += 2
+            else:
+                while i < n and src[i] != "\n":
+                    i += 1
+        elif ch in ('"', "'"):
+            quote = ch
+            i += 1
+            while i < n:
+                if src[i] == "\\":
+                    i += 2
+                    continue
+                if src[i] == quote:
+                    i += 1
+                    break
+                i += 1
+            else:
+                return False, "unterminated string literal"
+        else:
+            clean.append(ch)
+            i += 1
+    text = "".join(clean)
+    for a, b in (("{", "}"), ("[", "]"), ("(", ")")):
+        ca, cb = text.count(a), text.count(b)
+        if ca != cb:
+            return False, f"unbalanced brackets: {ca} '{a}' vs {cb} '{b}'"
+    for bad in ("True", "False", "None"):
+        if re.search(rf"\b{bad}\b", text):
+            return False, f"Python literal '{bad}' leaked into Lua"
+    return True, "ok"
 
 
 def mapinfo_lua(name, desc, author, hmin, hmax, smtname, starts, biome, water_h, smfname, minimap_tex=None,

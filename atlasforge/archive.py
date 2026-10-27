@@ -9,7 +9,7 @@ from PIL import Image, ImageDraw
 
 from . import SQ, TEX_PER_SQ, TILE
 from .config import ForgeConfig
-from .formats import (dds_bytes, mapinfo_lua, metal_layout_lua, minimap_dxt, png_bytes, smt_header,
+from .formats import (dds_bytes, lua_syntax_check, mapinfo_lua, metal_layout_lua, minimap_dxt, png_bytes, smt_header,
                       startboxes_lua, tiles_from_strip, write_smf)
 from .features import grass_map, place_trees
 from .render import (PAINT_LAYERS, NoiseBank, build_texture_fields, crack_field, detail_bmp, material_files,
@@ -208,10 +208,16 @@ def build_archive(name, hm, sym, starts, mexes, geos, biome, rng, outdir, desc, 
             gs = np.clip(gs / (gs.reshape(-1, 3).mean(0) + 1e-3) * 0.92, 0, 1.25) / 1.25 * 255
             shading_name = "grass_shading.png"
             z.writestr("maps/" + shading_name, png_bytes(np.asarray(Image.fromarray(gs.astype(np.uint8)).resize((512, 512), Image.BOX))))
-        z.writestr("mapinfo.lua", mapinfo_lua(name, desc, author, hmin, hmax, smt_name, starts, biome, water_h,
-                                              fname + ".smf", minimap_tex="minimap_ingame.dds",
-                                              emission_tex=emis_name, sky_box=sky_name,
-                                              grass_shading=shading_name, water=water))
+        def write_lua(path, text):
+            ok, msg = lua_syntax_check(text)
+            if not ok:
+                raise ValueError(f"generated Lua ({path}) is invalid: {msg}")
+            z.writestr(path, text)
+
+        write_lua("mapinfo.lua", mapinfo_lua(name, desc, author, hmin, hmax, smt_name, starts, biome, water_h,
+                                             fname + ".smf", minimap_tex="minimap_ingame.dds",
+                                             emission_tex=emis_name, sky_box=sky_name,
+                                             grass_shading=shading_name, water=water))
         z.write(smf_path, f"maps/{fname}.smf")
         z.write(smt_path, f"maps/{smt_name}", compresslevel=1)
         z.writestr("maps/minimap_ingame.dds", minimap_dds)
@@ -219,9 +225,12 @@ def build_archive(name, hm, sym, starts, mexes, geos, biome, rng, outdir, desc, 
         for fn_, data_ in material_files(hmq, TF, biome, mexes, geos, rng, log).items():
             z.writestr("maps/" + fn_, data_)
         for fn_, data_ in (extra_files or {}).items():
-            z.writestr(fn_, data_)
-        z.writestr("mapconfig/map_metal_layout.lua", metal_layout_lua(mexes))
-        z.writestr("mapconfig/map_startboxes.lua", startboxes or startboxes_lua(sym, starts))
+            if fn_.endswith(".lua") and isinstance(data_, str):
+                write_lua(fn_, data_)
+            else:
+                z.writestr(fn_, data_)
+        write_lua("mapconfig/map_metal_layout.lua", metal_layout_lua(mexes))
+        write_lua("mapconfig/map_startboxes.lua", startboxes or startboxes_lua(sym, starts))
     os.remove(smf_path); os.remove(smt_path)
 
     info = dict(name=name, file=os.path.basename(sdz), path=os.path.abspath(sdz), size=[ux, uz], **(extra or {}),

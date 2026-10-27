@@ -14,7 +14,7 @@ SUPPORT_URL = "https://ko-fi.com/scuide"
 SUPPORT_TEXT = "Enjoying Atlas Map Forge? Support me on Ko-fi to help development: " + SUPPORT_URL
 PREFIX = "Forge"             # every map name: "Forge <title> v<version>"
 DEFAULT_AUTHOR = "Georuku"   # fallback author when none is configured
-CREDIT = "[Created using the Zero-K Map Editor Fork (Atlas Map Forge)]"
+CREDIT = "Created using the Zero-K Map Editor Fork (Atlas Map Forge)."
 
 
 def _config_dir():
