@@ -14,6 +14,8 @@ SUPPORT_URL = "https://ko-fi.com/scuide"
 SUPPORT_TEXT = "Enjoying Atlas Map Forge? Support me on Ko-fi to help development: " + SUPPORT_URL
 PREFIX = "Forge"             # every map name: "Forge <title> v<version>"
 BADGE = "none"               # no badge on built maps
+DEFAULT_AUTHOR = "Georuku"   # fallback author when none is configured
+CREDIT = "[Created using the Zero-K Map Editor Fork (Atlas Map Forge)]"
 
 
 def _config_dir():
@@ -47,20 +49,23 @@ class ForgeConfig:
         return f"{PREFIX} {title} v{version}"
 
     def describe(self, text):
-        return text
+        """Map description with the fork credit line appended (always visible in game)."""
+        text = (text or "").strip()
+        return f"{text}\n{CREDIT}" if text else CREDIT
+
+    def effective_author(self):
+        """Configured author name, or the fork default when none is set."""
+        return self.author.strip() or DEFAULT_AUTHOR
 
     def validate(self):
-        a = self.author
+        a = self.effective_author()
         if any(c in a for c in '"\\\n') or len(a) > 40:
             raise ValueError("Author name: at most 40 characters, no quotes, backslashes or line breaks")
         return self
 
     def require_author(self):
-        """Maps can only be built with an author name."""
-        if not self.author.strip():
-            raise ValueError("Set your author name first (atlasforge config --author \"YourName\", "
-                             "or Settings in the app).")
-        return self
+        """Maps always carry an author: the configured name, or the fork default."""
+        return self.validate()
 
 
 def default_outdir():

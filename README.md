@@ -16,6 +16,9 @@ Because of these custom additions (custom map sizes, symmetric terrain brushes, 
 - **Custom AI Sandbox:** The "Blank Sand" template allows starting from scratch with a flat, solid-color desert map.
 - **Heightmap Persistence:** Projects now save the actual painted terrain (`.npy`) and textures, not just the initial parameters.
 
+## How to use the Fork's Custom Features
+To take advantage of the custom map sizes, the symmetric terrain brush, and the AI generation, you MUST select the **Template = Blank Sand** when creating a new map. The original procedural templates (like 8x8 or 16x16) do not support custom dimensions or the terrain brush.
+
 ## Featured Map: Castle Defense v2
 This project was originally created to build **Castle Defense v2**, the author's first map.
 - **Theme:** Inspired by castle defense and siege themes.

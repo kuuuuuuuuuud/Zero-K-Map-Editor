@@ -62,7 +62,7 @@ def _diffuse_texture(diffuse, Wpx, Hpx):
 def build_archive(name, hm, sym, starts, mexes, geos, biome, rng, outdir, desc, config=None, log=print,
                   preview=True, extra=None, tree_block=None, startboxes=None, extra_files=None, features=None,
                   random_trees=True, preview_marks=None, preview_start_colors=None, paint=None, workers=None,
-                  keep_clear=None, diffuse=None, water=None):
+                  keep_clear=None, diffuse=None, water=None, author=None):
     """Build <outdir>/<name>.sdz. Returns an info dict.
     config: ForgeConfig (author); desc is used as given.
     paint: optional dict of 0..1 fields (heightmap resolution) for PAINT_LAYERS.
@@ -72,6 +72,7 @@ def build_archive(name, hm, sym, starts, mexes, geos, biome, rng, outdir, desc, 
              procedural texture renderer (render_rgb) is skipped and this image is sliced into SMT tiles
              and used for the minimap."""
     cfg = config or ForgeConfig()
+    author = (author or "").strip() or cfg.effective_author()
     nz, nx = hm.shape[0] - 1, hm.shape[1] - 1
     if not np.isfinite(hm).all():
         raise ValueError(f"heightmap contains {int((~np.isfinite(hm)).sum())} invalid values (NaN/inf)")
@@ -191,7 +192,7 @@ def build_archive(name, hm, sym, starts, mexes, geos, biome, rng, outdir, desc, 
             gs = np.clip(gs / (gs.reshape(-1, 3).mean(0) + 1e-3) * 0.92, 0, 1.25) / 1.25 * 255
             shading_name = "grass_shading.png"
             z.writestr("maps/" + shading_name, png_bytes(np.asarray(Image.fromarray(gs.astype(np.uint8)).resize((512, 512), Image.BOX))))
-        z.writestr("mapinfo.lua", mapinfo_lua(name, desc, cfg.author, hmin, hmax, smt_name, starts, biome, water_h,
+        z.writestr("mapinfo.lua", mapinfo_lua(name, desc, author, hmin, hmax, smt_name, starts, biome, water_h,
                                               fname + ".smf", emission_tex=emis_name, sky_box=sky_name,
                                               grass_shading=shading_name, water=water))
         z.write(smf_path, f"maps/{fname}.smf")

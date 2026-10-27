@@ -421,6 +421,7 @@ async function edSave() {
   const title = ($("title").value || S.map.title || "map").trim();
   const data = Object.assign({}, ED.base, {
     template: S.map.template, values: S.map.values, seed: S.map.seed, symmetry: S.symmetry, edits: S.edits, title,
+    author: $("author").value.trim(), description: $("description").value.trim(),
     app_version: S.info.version,
   });
   try {
@@ -456,7 +457,15 @@ function applyProject(r) {
   clearTimeout(pvTimer);
   $("seed").value = p.seed;
   S.titleEdited[p.template] = !!p.title;
-  const done = () => { if (p.title) $("title").value = p.title; };
+  const done = () => {
+    if (p.title) $("title").value = p.title;
+    $("author").value = p.author || (S.info.settings.config.author || "").trim() || "Georuku";
+    $("description").value = p.description || "";
+    S.authors[p.template] = $("author").value;
+    S.descriptions[p.template] = $("description").value;
+    store("authors", S.authors);
+    store("descriptions", S.descriptions);
+  };
   if (r.design) {
     // The server already rebuilt the design from the saved heightmap + texture (Forge Editor).
     const seq = ++S.seq;

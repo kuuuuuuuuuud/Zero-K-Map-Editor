@@ -89,8 +89,9 @@ def validate(data, templates=None) -> dict:
     if not isinstance(data.get("symmetry"), bool):
         raise ValueError("symmetry: expected true or false")
     validate_edits(data.get("edits"))
-    if "title" in data and not isinstance(data["title"], str):
-        raise ValueError("title: expected a string")
+    for key in ("title", "author", "description"):
+        if key in data and not isinstance(data[key], str):
+            raise ValueError(f"{key}: expected a string")
     for key in ("heightmap_path", "texture_path"):
         if key in data and data[key] is not None and not isinstance(data[key], str):
             raise ValueError(f"{key}: expected a string")
@@ -98,7 +99,7 @@ def validate(data, templates=None) -> dict:
 
 
 def new_project(template, values, seed, symmetry=True, edits=None,
-                title=None, app_version=None) -> dict:
+                title=None, app_version=None, author=None, description=None) -> dict:
     data = {
         "format": FORMAT_ID,
         "version": CURRENT_VERSION,
@@ -111,6 +112,10 @@ def new_project(template, values, seed, symmetry=True, edits=None,
     }
     if title is not None:
         data["title"] = title
+    if author is not None:
+        data["author"] = author
+    if description is not None:
+        data["description"] = description
     return validate(data)
 
 

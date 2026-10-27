@@ -77,7 +77,11 @@ input[type=text], input[type=number], input:not([type]) {
   width: 100%; height: 32px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--line-2);
   background: #0f1013; outline: none;
 }
-input:focus { border-color: var(--ember); box-shadow: 0 0 0 2px rgba(255, 122, 26, .2); }
+textarea {
+  width: 100%; min-height: 64px; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--line-2);
+  background: #0f1013; outline: none; font: inherit; color: inherit; resize: vertical;
+}
+input:focus, textarea:focus { border-color: var(--ember); box-shadow: 0 0 0 2px rgba(255, 122, 26, .2); }
 input[type=range] { width: 100%; accent-color: var(--ember); height: 18px; margin: 0; }
 .chips { display: flex; flex-wrap: wrap; gap: 5px; }
 .chips button {

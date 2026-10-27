@@ -12,7 +12,7 @@ the session token that is written into the page, so other web pages cannot use t
   POST /api/ramp     {id, x1, y1, x2, y2, width, start_height, end_height, symmetry} -> relief + heightmap previews
   POST /api/undo     {id}  -> restore the previous terrain heightmap (relief + heightmap previews)
   POST /api/redo     {id}  -> re-apply an undone terrain edit (relief + heightmap previews)
-  POST /api/build    {id, title, version, install}  -> job id
+  POST /api/build    {id, title, version, install, author, description}  -> job id
   GET  /api/job/<job>                   progress, log, result
   POST /api/config   {author, zerok, outdir, projdir, advanced}
   POST /api/project_save {data}        write a project to the project folder -> {path, folder}
@@ -429,7 +429,8 @@ class Forge:
         d.pop("format", None)
         d.pop("version", None)
         base = project.new_project(d.pop("template"), d.pop("values", {}), d.pop("seed", 1), d.pop("symmetry", True),
-                                   d.pop("edits", []), d.pop("title", None), d.pop("app_version", __version__))
+                                   d.pop("edits", []), d.pop("title", None), d.pop("app_version", __version__),
+                                   d.pop("author", None), d.pop("description", None))
         base.update(d)                                         # unknown fields of a loaded file are kept
         project.validate(base, templates=self._template_ids())
         return base
@@ -461,7 +462,7 @@ class Forge:
         p = project.loads(text)
         project.validate(p, templates=self._template_ids())
         known = ("format", "version", "app_version", "template", "values", "seed", "symmetry", "edits", "title",
-                 "heightmap_path", "texture_path")
+                 "author", "description", "heightmap_path", "texture_path")
         out = dict(project=p, extra={k: v for k, v in p.items() if k not in known})
         design = self._restore_design(p, path)
         if design is not None:
@@ -613,7 +614,10 @@ class Forge:
         if not self.build_lock.acquire(blocking=False):
             raise RuntimeError("A map is already being built. Please wait until it is finished.")
         try:
-            C.load().require_author()
+            cfg = C.load()
+            author = (data.get("author") or "").strip() or cfg.author.strip() or C.DEFAULT_AUTHOR
+            C.ForgeConfig(author=author).validate()
+            description = (data.get("description") or "").strip()
             e = self.entry(data["id"])
             title = (data.get("title") or e.design.title).strip()
             if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9 '\-.()]{0,47}", title):
@@ -626,11 +630,12 @@ class Forge:
             raise
         job = Job()
         self.jobs[job.id] = job
-        threading.Thread(target=self._run_build, args=(job, e, title, version, bool(data.get("install", True))),
+        threading.Thread(target=self._run_build,
+                         args=(job, e, title, version, bool(data.get("install", True)), author, description),
                          daemon=True).start()
         return job.to_dict()
 
-    def _run_build(self, job, e, title, version, do_install):
+    def _run_build(self, job, e, title, version, do_install, author, description):
         from .. import forge
         from ..install import install
 
@@ -653,7 +658,8 @@ class Forge:
             outdir = s["outdir"]
             os.makedirs(outdir, exist_ok=True)
             job.phase = "Placing trees"
-            info = forge.build(e.design, outdir=outdir, config=cfg, title=title, version=version, log=log)
+            info = forge.build(e.design, outdir=outdir, config=cfg, title=title, version=version, log=log,
+                               author=author, description=description or None)
             info["installed"] = None
             info["warning"] = None
             if do_install:

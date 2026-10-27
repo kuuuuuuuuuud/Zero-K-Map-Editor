@@ -8,7 +8,7 @@ import pytest
 
 from atlasforge import gadgets
 from atlasforge.checks import report, unit_masks
-from atlasforge.config import ForgeConfig
+from atlasforge.config import CREDIT, DEFAULT_AUTHOR, ForgeConfig
 from atlasforge.procedural import generate
 from atlasforge.terrain import grid, plateau
 
@@ -38,7 +38,7 @@ def test_archive_contents(built):
             assert f in names, f
         mi = z.read("mapinfo.lua").decode()
         assert 'name        = "Forge Test Hills v1"' in mi
-        assert "Made with Atlas Map Forge." in mi
+        assert CREDIT in mi
         smf = z.read("maps/Forge_Test_Hills_v1.smf")
         hdr = struct.unpack("<16s7i2f7i", smf[:80])
         assert hdr[0].startswith(b"spring map file") and hdr[3] == 256 and hdr[4] == 256
@@ -76,9 +76,9 @@ def test_wall_blocks_tanks_and_becomes_lava_cliff():
 
 def test_config_names():
     assert ForgeConfig(author="A").map_name("Ridge", 2) == "Forge Ridge v2"     # prefix is fixed
-    assert ForgeConfig().describe("Hills.") == "Hills."
-    with pytest.raises(ValueError):
-        ForgeConfig().require_author()
+    assert ForgeConfig().describe("Hills.") == f"Hills.\n{CREDIT}"
+    assert ForgeConfig().effective_author() == DEFAULT_AUTHOR == "Georuku"
+    assert ForgeConfig().require_author().effective_author() == DEFAULT_AUTHOR
     with pytest.raises(ValueError):
         ForgeConfig(author='bad"name').validate()
 

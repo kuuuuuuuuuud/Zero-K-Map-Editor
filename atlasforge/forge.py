@@ -227,8 +227,10 @@ def preview(design, size=1024, overlays=True):
 
 
 # ----------------------------------------------------------------------------- build
-def build(design, outdir=".", config=None, title=None, version=1, name=None, log=print, preview=True):
-    """Write the .sdz. Map name = config.map_name(title or design.title, version) unless name is given."""
+def build(design, outdir=".", config=None, title=None, version=1, name=None, log=print, preview=True,
+          author=None, description=None):
+    """Write the .sdz. Map name = config.map_name(title or design.title, version) unless name is given.
+    author / description: per-project overrides for mapinfo.lua (fall back to config / design)."""
     cfg = config or ForgeConfig()
     name = name or cfg.map_name(title or design.title, version)
     paint = design.paint
@@ -238,8 +240,9 @@ def build(design, outdir=".", config=None, title=None, version=1, name=None, log
             lane = np.clip(ndimage.gaussian_filter(core.astype(np.float32), 2.5) * 1.3, 0, 1) * 0.6
             paint = dict(paint or {}, path=lane)
     rng = design.build_rng()
+    desc = description if description is not None and str(description).strip() else design.description
     return build_archive(name, design.hm, design.sym, design.starts, design.mexes, design.geos, design.biome, rng,
-                         outdir, cfg.describe(design.description), config=cfg, log=log, preview=preview,
+                         outdir, cfg.describe(desc), config=cfg, author=author, log=log, preview=preview,
                          extra=dict(template=design.template, seed=design.seed),
                          tree_block=design.tree_block, startboxes=design.startboxes, extra_files=design.extra_files,
                          features=design.features, random_trees=design.random_trees, paint=paint,

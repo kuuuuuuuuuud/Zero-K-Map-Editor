@@ -22,6 +22,8 @@ const S = {
   view: { cx: 0, cy: 0, s: 0.1 },
   titleEdited: {},
   titles: {},
+  authors: {},         // per template id: map author (mapinfo author)
+  descriptions: {},    // per template id: map description
   job: null,
   edits: [],           // manual edits of the current map (see atlasforge/edits.py)
   redo: [],
@@ -97,6 +99,8 @@ async function init() {
   S.seeds = recall("seeds", {});
   S.titles = recall("titles", {});
   S.titleEdited = recall("titleEdited", {});
+  S.authors = recall("authors", {});
+  S.descriptions = recall("descriptions", {});
   for (const [k, v] of Object.entries(recall("layers", {}))) if (k in S.layers) S.layers[k] = v;
   syncToolbar();
   renderGallery();
@@ -207,6 +211,8 @@ function selectTemplate(id) {
   $("seed").value = S.seeds[id] || 7;
   renderParams();
   $("title").value = S.titles[id] || S.tpl.title;
+  $("author").value = S.authors[id] || (S.info.settings.config.author || "").trim() || "Georuku";
+  $("description").value = S.descriptions[id] || "";
   schedulePreview(0, true);
 }
 
@@ -948,14 +954,23 @@ $("title").addEventListener("input", () => {
   refreshVersions();
 });
 $("version").addEventListener("input", () => { refreshVersions.manual = true; versionNote(); updateName(); });
+$("author").addEventListener("input", () => {
+  S.authors[S.tpl.id] = $("author").value;
+  store("authors", S.authors);
+});
+$("description").addEventListener("input", () => {
+  S.descriptions[S.tpl.id] = $("description").value;
+  store("descriptions", S.descriptions);
+});
 
 function updateBuildButton() {
   const b = $("btn-build");
   const running = S.job && S.job.state === "running";
-  b.disabled = !S.map || S.busy || running || !hasAuthor();
+  const authorOk = !!$("author").value.trim();
+  b.disabled = !S.map || S.busy || running || !authorOk;
   b.classList.toggle("warn", !!S.map && !S.map.ok);
-  b.title = hasAuthor() ? "" : "Set your author name in Settings first";
-  b.textContent = running ? "Building..." : !hasAuthor() ? "Build map (author name needed)"
+  b.title = authorOk ? "" : "Set the map author first";
+  b.textContent = running ? "Building..." : !authorOk ? "Build map (author needed)"
     : S.map && !S.map.ok ? "Build anyway (check found problems)" : "Build map";
 }
 
@@ -964,7 +979,7 @@ $("btn-build").onclick = async () => {
   $("result").classList.add("hidden");
   unlockAudio();
   try {
-    const job = await api("build", { id: S.map.id, title: $("title").value.trim(), version: parseInt($("version").value, 10), install: $("install").checked });
+    const job = await api("build", { id: S.map.id, title: $("title").value.trim(), version: parseInt($("version").value, 10), install: $("install").checked, author: $("author").value.trim(), description: $("description").value.trim() });
     S.job = job;
     $("progress").classList.remove("hidden");
     $("logbox").classList.remove("hidden");
