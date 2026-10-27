@@ -9,7 +9,7 @@ from PIL import Image, ImageDraw
 
 from . import SQ, TEX_PER_SQ, TILE
 from .config import ForgeConfig
-from .formats import (mapinfo_lua, metal_layout_lua, minimap_dxt, png_bytes, smt_header,
+from .formats import (dds_bytes, mapinfo_lua, metal_layout_lua, minimap_dxt, png_bytes, smt_header,
                       startboxes_lua, tiles_from_strip, write_smf)
 from .features import grass_map, place_trees
 from .render import (PAINT_LAYERS, NoiseBank, build_texture_fields, crack_field, detail_bmp, material_files,
@@ -57,6 +57,18 @@ def _diffuse_texture(diffuse, Wpx, Hpx):
     if arr.shape[0] != Hpx or arr.shape[1] != Wpx:      # wrong size -> resize to the texel grid
         arr = np.asarray(Image.fromarray(arr).resize((Wpx, Hpx), Image.LANCZOS))
     return np.ascontiguousarray(arr)
+
+
+def _minimap_size(nx, nz):
+    """Power-of-two (w, h) for minimap_ingame.dds, closest to the map's aspect ratio."""
+    aspect = nx / nz
+    best = None
+    for w in (2 ** i for i in range(4, 11)):          # 16 .. 1024
+        for h in (2 ** i for i in range(4, 11)):
+            key = (abs(w / h - aspect), -(w * h), -w)  # ratio fit, then area, then width
+            if best is None or key < best[0]:
+                best = (key, w, h)
+    return best[1], best[2]
 
 
 def build_archive(name, hm, sym, starts, mexes, geos, biome, rng, outdir, desc, config=None, log=print,
@@ -159,6 +171,10 @@ def build_archive(name, hm, sym, starts, mexes, geos, biome, rng, outdir, desc, 
     mini_img = mini_clean
     minimap = minimap_dxt(mini_img)
     assert len(minimap) == 699048
+    mw, mh = _minimap_size(nx, nz)
+    mini_ingame = np.asarray(Image.fromarray(mini_clean).resize((mw, mh), Image.LANCZOS))
+    # Recoil flips DDS files vertically when loading (CBitmap::Load): write upside down.
+    minimap_dds = dds_bytes(np.ascontiguousarray(mini_ingame[::-1]), "DXT1")
 
     feats = [("geovent", g[0], float(hmq[int(g[1] / SQ), int(g[0] / SQ)]), g[1], 0.0, 1.0) for g in geos]
     feats += [(f"treetype{t}", x, y, z, rot, 1.0) for (t, x, y, z, rot) in trees]
@@ -193,10 +209,12 @@ def build_archive(name, hm, sym, starts, mexes, geos, biome, rng, outdir, desc, 
             shading_name = "grass_shading.png"
             z.writestr("maps/" + shading_name, png_bytes(np.asarray(Image.fromarray(gs.astype(np.uint8)).resize((512, 512), Image.BOX))))
         z.writestr("mapinfo.lua", mapinfo_lua(name, desc, author, hmin, hmax, smt_name, starts, biome, water_h,
-                                              fname + ".smf", emission_tex=emis_name, sky_box=sky_name,
+                                              fname + ".smf", minimap_tex="minimap_ingame.dds",
+                                              emission_tex=emis_name, sky_box=sky_name,
                                               grass_shading=shading_name, water=water))
         z.write(smf_path, f"maps/{fname}.smf")
         z.write(smt_path, f"maps/{smt_name}", compresslevel=1)
+        z.writestr("maps/minimap_ingame.dds", minimap_dds)
         z.writestr("maps/detailtex.bmp", detail_bmp(rng))
         for fn_, data_ in material_files(hmq, TF, biome, mexes, geos, rng, log).items():
             z.writestr("maps/" + fn_, data_)

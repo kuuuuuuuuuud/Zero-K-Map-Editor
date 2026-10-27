@@ -163,7 +163,7 @@ def _cmd_config(a):
         cfg.author = a.author.strip(); changed = True
     if changed:
         print("saved", C.save(cfg))
-    print(json.dumps(dict(cfg.__dict__, prefix=C.PREFIX, badge=C.BADGE), indent=1))
+    print(json.dumps(dict(cfg.__dict__, prefix=C.PREFIX), indent=1))
     return 0
 
 

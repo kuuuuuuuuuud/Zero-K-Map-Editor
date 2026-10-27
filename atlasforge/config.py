@@ -13,7 +13,6 @@ TOOL_NAME = "Atlas Map Forge"
 SUPPORT_URL = "https://ko-fi.com/scuide"
 SUPPORT_TEXT = "Enjoying Atlas Map Forge? Support me on Ko-fi to help development: " + SUPPORT_URL
 PREFIX = "Forge"             # every map name: "Forge <title> v<version>"
-BADGE = "none"               # no badge on built maps
 DEFAULT_AUTHOR = "Georuku"   # fallback author when none is configured
 CREDIT = "[Created using the Zero-K Map Editor Fork (Atlas Map Forge)]"
 
@@ -42,7 +41,6 @@ class ForgeConfig:
     advanced: bool = False           # advanced mode: wider parameter limits, maps may break
 
     prefix = PREFIX                  # fixed, not a setting
-    badge = BADGE
     credit = True
 
     def map_name(self, title, version=1):
