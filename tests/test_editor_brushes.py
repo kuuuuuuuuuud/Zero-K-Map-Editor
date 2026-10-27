@@ -73,10 +73,10 @@ def test_apply_brush_square_shape():
 
 def test_apply_brush_limit():
     hm = np.full((5, 9), 50.0, dtype=np.float32)
-    raised = apply_brush(hm, 4, 2, 3.0, 20.0, "raise", "none", limit=55.0)
+    raised = apply_brush(hm, 4, 2, 3.0, 20.0, "raise", "none", max_limit=55.0)
     assert raised[2, 4] == 55.0                   # clamped at max height
     assert raised[2, 3] == 55.0
-    lowered = apply_brush(hm, 4, 2, 3.0, 20.0, "lower", "none", limit=40.0)
+    lowered = apply_brush(hm, 4, 2, 3.0, 20.0, "lower", "none", min_limit=40.0)
     assert lowered[2, 4] == 40.0                  # clamped at min height
     assert lowered[0, 0] == 50.0                  # cells outside the brush are never clamped
 

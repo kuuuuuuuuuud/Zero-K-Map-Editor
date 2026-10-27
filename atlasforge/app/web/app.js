@@ -319,7 +319,8 @@ function paramField(p, vals) {
         b.classList.toggle("beyond", beyond(p, c));
         b.onclick = () => {
           for (const o of chips.children) o.classList.toggle("on", o === b);
-          setValue(p.key, c);
+          if (p.key === "surface") setSurface(c);
+          else setValue(p.key, c);
         };
         chips.appendChild(b);
       }
@@ -412,6 +413,38 @@ function setValue(k, v) {
   S.values[S.tpl.id][k] = v;
   store("values", S.values);
   if ($("auto").checked) schedulePreview(250);
+}
+
+// Changing the surface (water/lava/void) is a map SETTING, not a template generator:
+// update the live design's water table + values without regenerating the heightmap.
+// This must never prompt to discard manual changes and must never touch design.hm.
+async function setSurface(v) {
+  S.values[S.tpl.id].surface = v;
+  store("values", S.values);
+  if (!S.map) return;                       // no live design yet: the next preview picks it up
+  const id = S.map.id;
+  try {
+    const r = await api("surface", { id, surface: v });
+    if (!S.map || S.map.id !== id) return;
+    if (r.values) S.map.values = Object.assign({}, S.map.values, r.values);
+    if (r.height) S.map.height = r.height;
+    if (r.ok !== undefined) S.map.ok = r.ok;
+    if (r.lines) S.map.lines = r.lines;
+    S.img.reach = {};
+    S.brushVer = (S.brushVer || 0) + 1;
+    if (r.preview) {
+      const img = await new Promise((res) => {
+        const im = new Image();
+        im.onload = () => res(im);
+        im.onerror = () => res(null);
+        im.src = r.preview;
+      });
+      if (img && S.map && S.map.id === id) { S.img.relief = img; S.img.reliefSize = 1024; }
+    }
+    renderReport();
+    renderFacts();
+    draw();
+  } catch (e) { toast(e.message); }
 }
 
 // ------------------------------------------------------------------ preview

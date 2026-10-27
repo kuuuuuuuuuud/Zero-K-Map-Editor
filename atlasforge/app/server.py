@@ -8,10 +8,11 @@ the session token that is written into the page, so other web pages cannot use t
   GET  /api/layer/<id>/<name>?size=N    relief (JPEG), hazard, gates, reach_<class> (PNG), cells, height (raw)
   GET  /api/versions?title=...          map versions that already exist
   POST /api/edit     {id, edits, symmetry}  -> moved/added/deleted spots, check report, problems
-  POST /api/brush    {id, x, y, radius, strength, mode, symmetry, shape, limit, begin, check} -> relief + heightmap previews
+  POST /api/brush    {id, x, y, radius, strength, mode, symmetry, shape, min_limit, max_limit, begin, check} -> relief + heightmap previews
   POST /api/ramp     {id, x1, y1, x2, y2, width, start_height, end_height, symmetry} -> relief + heightmap previews
   POST /api/undo     {id}  -> restore the previous terrain heightmap (relief + heightmap previews)
   POST /api/redo     {id}  -> re-apply an undone terrain edit (relief + heightmap previews)
+  POST /api/surface  {id, surface}  -> change water/lava/void surface without touching the heightmap
   POST /api/build    {id, title, version, install, author, description}  -> job id
   GET  /api/job/<job>                   progress, log, result
   POST /api/config   {author, zerok, outdir, projdir, advanced}
@@ -257,7 +258,8 @@ class Forge:
 
         x, y are heightmap pixel coordinates (x = column, y = row). The dab is mirrored with
         ``symmetry`` (ew_ns by default) like the object editor; ``shape`` (circle/square),
-        ``limit`` (height bound for raise/lower) and ``mode`` (raise/lower/smooth) tune it.
+        ``min_limit`` / ``max_limit`` (height bounds for raise/lower, 0 = no limit) and
+        ``mode`` (raise/lower/smooth) tune it.
         ``begin`` marks the first dab of a stroke, when the previous heightmap is pushed onto
         the undo history. Returns relief + heightmap previews as JPEG data URLs plus the new
         height range and undo/redo availability; when ``check`` is true the design is also
@@ -273,13 +275,16 @@ class Forge:
         mode = data.get("mode", "raise")
         symmetry = data.get("symmetry", "ew_ns")
         shape = data.get("shape", "circle")
-        limit = data.get("limit")
-        limit = None if limit is None or limit == "" else float(limit)
+        min_limit = data.get("min_limit")
+        min_limit = None if min_limit is None or min_limit == "" else float(min_limit)
+        max_limit = data.get("max_limit")
+        max_limit = None if max_limit is None or max_limit == "" else float(max_limit)
         t0 = time.time()
         with e.lock:
             if data.get("begin"):
                 self._push_history(e)
-            hm = apply_brush(e.design.hm, x, y, radius, strength, mode, symmetry, shape=shape, limit=limit)
+            hm = apply_brush(e.design.hm, x, y, radius, strength, mode, symmetry, shape=shape,
+                             min_limit=min_limit, max_limit=max_limit)
             # The terrain lives both in the working design and in the base it re-derives manual
             # edits from, so brush work survives later metal/start edits and vice versa.
             e.design.hm = hm
@@ -333,13 +338,15 @@ class Forge:
         mode = data.get("mode", "raise")
         symmetry = data.get("symmetry", "ew_ns")
         shape = data.get("shape", "circle")
-        limit = data.get("limit")
-        limit = None if limit is None or limit == "" else float(limit)
+        min_limit = data.get("min_limit")
+        min_limit = None if min_limit is None or min_limit == "" else float(min_limit)
+        max_limit = data.get("max_limit")
+        max_limit = None if max_limit is None or max_limit == "" else float(max_limit)
         t0 = time.time()
         with e.lock:
             self._push_history(e)
             hm = apply_brush_line(e.design.hm, x1, y1, x2, y2, radius, strength, mode,
-                                  symmetry, shape=shape, limit=limit)
+                                  symmetry, shape=shape, min_limit=min_limit, max_limit=max_limit)
             e.design.hm = hm
             e.base.hm = hm
             self._invalidate_terrain(e)
@@ -385,6 +392,39 @@ class Forge:
             out = self._terrain_reply(e, t0)
             out["ok"] = True
             return out
+
+    def surface(self, data):
+        """Change the surface of a live design without touching the heightmap.
+
+        ``surface`` accepts a UI label ("Water") or an internal key ("water"). The design's
+        water table, extra files (void death gadget) and ``values`` are updated in place on
+        both the working design and its base, so the next build writes the new surface and
+        later object edits still see it. The heightmap (``design.hm``) and all manual edits
+        are left untouched. Returns a fresh relief preview, the height range, the canonical
+        surface label + values and the re-checked report.
+        """
+        from .. import forge
+        from ..surfaces import surface_extra_files, surface_key, surface_label, surface_water
+        e = self.entry(data["id"])
+        key = surface_key(data.get("surface", "none"))
+        label = surface_label(key)
+        t0 = time.time()
+        objs = (e.design, e.base) if e.design is not e.base else (e.design,)
+        with e.lock:
+            for obj in objs:
+                files = dict(obj.extra_files)
+                files.pop("LuaRules/Gadgets/void_death.lua", None)
+                files.update(surface_extra_files(key))
+                obj.extra_files = files
+                obj.water = surface_water(key)
+                obj.values = dict(obj.values, surface=key)
+            self._invalidate_terrain(e)
+            with self.make_lock:
+                ok, lines = forge.check(e.design)
+            e.ok, e.lines = ok, lines
+            out = self._terrain_reply(e, t0)
+            out.update(ok=ok, lines=lines, surface=label, values=dict(e.design.values))
+        return out
 
     # ------------------------------------------------------------------ project files (.forge.json)
     def project_dump(self, data):
@@ -828,6 +868,7 @@ def make_handler(forge_state, quiet=True):
                 fn = {"preview": forge_state.preview, "edit": forge_state.edit, "brush": forge_state.brush,
                       "brush_line": forge_state.brush_line, "ramp": forge_state.ramp,
                       "undo": forge_state.undo, "redo": forge_state.redo,
+                      "surface": forge_state.surface,
                       "project_dump": forge_state.project_dump,
                       "project_load": forge_state.project_load,
                       "project_save": forge_state.project_save, "build": forge_state.build,

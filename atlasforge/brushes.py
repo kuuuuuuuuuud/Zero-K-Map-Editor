@@ -130,27 +130,33 @@ def _footprint(hm, cx, cy, radius, shape):
     return (x * x + z * z) <= float(radius) * float(radius)
 
 
-def _paint(hm, mask, mode, strength, limit):
-    """Apply raise/lower/smooth to the cells selected by ``mask``; returns a new array."""
+def _paint(hm, mask, mode, strength, min_limit=None, max_limit=None):
+    """Apply raise/lower/smooth to the cells selected by ``mask``; returns a new array.
+
+    ``min_limit`` / ``max_limit`` clamp the final painted heights to
+    ``min(max(old + delta, min_limit), max_limit)``. A limit of 0 (or None) disables it,
+    matching the brush UI where 0 means "no limit". Limits are ignored for ``smooth``.
+    """
     out = hm.astype(np.float64, copy=True)
     if mode == "raise":
         painted = out[mask] + strength
-        if limit is not None:
-            painted = np.minimum(painted, float(limit))
-        out[mask] = painted
     elif mode == "lower":
         painted = out[mask] - strength
-        if limit is not None:
-            painted = np.maximum(painted, float(limit))
-        out[mask] = painted
     else:                                                     # smooth: average painted cells with their neighbours
         passes = max(0, min(50, int(round(strength))))
         for _ in range(passes):
             out += mask * (_box3(out) - out)
+        return out.astype(hm.dtype)
+    if min_limit is not None and float(min_limit) != 0.0:
+        painted = np.maximum(painted, float(min_limit))
+    if max_limit is not None and float(max_limit) != 0.0:
+        painted = np.minimum(painted, float(max_limit))
+    out[mask] = painted
     return out.astype(hm.dtype)
 
 
-def apply_brush(hm, x, y, radius, strength, mode="raise", symmetry="ew_ns", shape="circle", limit=None):
+def apply_brush(hm, x, y, radius, strength, mode="raise", symmetry="ew_ns", shape="circle",
+                min_limit=None, max_limit=None):
     """Apply a hard-edged terrain brush at pixel (x, y) and mirror it.
 
     hm       : 2D float heightmap array (row = z, column = x); the input is never modified.
@@ -162,9 +168,10 @@ def apply_brush(hm, x, y, radius, strength, mode="raise", symmetry="ew_ns", shap
     symmetry : "none", "ew" (mirror across the vertical centre line), "ns" (mirror
                across the horizontal centre line) or "ew_ns" (both mirrors).
     shape    : "circle" or "square".
-    limit    : optional height bound in elmos. mode="raise" never paints above it,
-               mode="lower" never paints below it (only painted cells are clamped).
-               Ignored for mode="smooth".
+    min_limit: optional lower height bound in elmos (0 = no limit); painted cells are
+               never below it. Ignored for mode="smooth".
+    max_limit: optional upper height bound in elmos (0 = no limit); painted cells are
+               never above it. Ignored for mode="smooth".
 
     Returns a NEW heightmap with the same shape and dtype as ``hm``.
     """
@@ -186,7 +193,7 @@ def apply_brush(hm, x, y, radius, strength, mode="raise", symmetry="ew_ns", shap
     mask = np.zeros((nz, nx), bool)
     for cx, cy in _mirrors(x, y, symmetry, nx, nz):
         mask |= _footprint(hm, cx, cy, radius, shape)
-    return _paint(hm, mask, mode, strength, limit)
+    return _paint(hm, mask, mode, strength, min_limit, max_limit)
 
 
 def apply_ramp(hm, x1, y1, x2, y2, width, start_height, end_height, symmetry="ew_ns"):
@@ -233,7 +240,7 @@ def apply_ramp(hm, x1, y1, x2, y2, width, start_height, end_height, symmetry="ew
 
 
 def apply_brush_line(hm, x1, y1, x2, y2, radius, strength, mode="raise", symmetry="ew_ns",
-                     shape="circle", limit=None):
+                     shape="circle", min_limit=None, max_limit=None):
     """Apply a hard-edged brush along the straight segment A(x1,y1)->B(x2,y2) and mirror it.
 
     Same contract as :func:`apply_brush`, except the brush is stamped at evenly spaced
@@ -265,5 +272,5 @@ def apply_brush_line(hm, x1, y1, x2, y2, radius, strength, mode="raise", symmetr
         steps = max(2, int(np.ceil(length / step)) + 1) if length > 0.0 else 1
         for t in np.linspace(0.0, 1.0, steps):
             mask |= _footprint(hm, ax + t * (bx - ax), ay + t * (by - ay), radius, shape)
-    return _paint(hm, mask, mode, strength, limit)
+    return _paint(hm, mask, mode, strength, min_limit, max_limit)
 

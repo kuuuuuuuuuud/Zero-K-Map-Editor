@@ -11,7 +11,8 @@ const BR = {
   mode: "raise",   // LMB action: raise | lower | smooth (RMB always lowers)
   active: "raise", // what the current pointer button does (for the cursor colour)
   shape: "circle", // circle | square
-  limit: null,     // height bound in elmos (max for raise, min for lower) or null
+  min: 0,          // minimum height bound in elmos (0 = no limit)
+  max: 0,          // maximum height bound in elmos (0 = no limit)
   canUndo: false,
   canRedo: false,
   painting: false,
@@ -68,10 +69,6 @@ function brUpdateUi() {
   $("brush-radius-val").textContent = BR.radius;
   $("brush-strength-val").textContent = BR.strength;
   $("brush-strength-label").textContent = BR.mode === "smooth" ? "Passes" : "Strength";
-  const limitOn = BR.mode !== "smooth";
-  $("brush-limit").classList.toggle("hidden", !limitOn);
-  $("brush-limit-label").classList.toggle("hidden", !limitOn);
-  $("brush-limit-label").textContent = BR.mode === "lower" ? "Min H" : "Max H";
   $("ramp-width-val").textContent = RA.width;
   $("br-undo").disabled = !BR.canUndo;
   $("br-redo").disabled = !BR.canRedo;
@@ -132,7 +129,7 @@ async function brSendLine(x1, y1, x2, y2, check) {
     const r = await api("brush_line", {
       id: S.map.id, x1, y1, x2, y2, radius: BR.radius, strength: BR.strength,
       mode: BR.active, symmetry: "ew_ns", shape: BR.shape,
-      limit: (BR.active === BR.mode && BR.mode !== "smooth") ? BR.limit : null,
+      min_limit: BR.min, max_limit: BR.max,
       check: !!check,
     });
     if (seq !== BR.seq || !S.map) return;
@@ -352,7 +349,8 @@ for (const b of document.querySelectorAll("#brush-extra [data-br-mode]")) b.oncl
 for (const b of document.querySelectorAll("#brush-extra [data-br-shape]")) b.onclick = () => { BR.shape = b.dataset.brShape; brUpdateUi(); draw(); };
 $("brush-radius").oninput = () => { BR.radius = parseInt($("brush-radius").value, 10) || 30; brUpdateUi(); draw(); };
 $("brush-strength").oninput = () => { BR.strength = parseInt($("brush-strength").value, 10) || 5; brUpdateUi(); };
-$("brush-limit").oninput = () => { const v = $("brush-limit").value; BR.limit = v === "" ? null : parseFloat(v); };
+$("brush-min").oninput = () => { const v = parseFloat($("brush-min").value); BR.min = Number.isFinite(v) ? v : 0; };
+$("brush-max").oninput = () => { const v = parseFloat($("brush-max").value); BR.max = Number.isFinite(v) ? v : 0; };
 $("ramp-width").oninput = () => { RA.width = parseInt($("ramp-width").value, 10) || 24; brUpdateUi(); };
 $("ramp-start").oninput = () => { RA.start = parseFloat($("ramp-start").value) || 0; };
 $("ramp-end").oninput = () => { RA.end = parseFloat($("ramp-end").value) || 0; };
