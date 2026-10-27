@@ -12,6 +12,7 @@ from PIL import Image
 from . import SQ, TEX_PER_SQ
 from .biomes import BIOMES
 from .design import Design
+from .surfaces import surface_extra_files, surface_key, surface_water
 from .symmetry import Symmetry
 
 SAND_RGB = (194, 178, 128)      # hex #C2B280
@@ -29,8 +30,13 @@ def _validate_dims(width, height):
     return width, height
 
 
-def flat_sand_design(width, height, seed=1, title="New Map", biome="desert", log=print):
-    """-> Design: flat 50-elmo terrain with a solid sand diffuse texture."""
+def flat_sand_design(width, height, seed=1, title="New Map", biome="desert", surface="none", log=print):
+    """-> Design: flat 50-elmo terrain with a solid sand diffuse texture.
+
+    ``surface`` selects the self-contained map surface (``none``, ``water``, ``lava``
+    or ``void``) that is written into ``mapinfo.lua``; ``void`` also packs the
+    ``LuaRules/Gadgets/void_death.lua`` gadget into the archive.
+    """
     width, height = _validate_dims(width, height)
     nx, nz = width * 64, height * 64
     W, H = nx * SQ, nz * SQ
@@ -47,12 +53,14 @@ def flat_sand_design(width, height, seed=1, title="New Map", biome="desert", log
     sym = Symmetry("ew", W, H)
     starts = sym.starts()
     teams = [[starts[0]], [starts[1]]]
-    water = dict(voidwater=True, waterlevel=-1000.0, damage=0.0,
-                 base=b["water_base"], min=b["water_min"], surf=b["water_surf"], plane=None)
+    surf = surface_key(surface)
+    water = surface_water(surf)
+    extra_files = surface_extra_files(surf)
 
-    log(f"  new project: {width}x{height} flat sand (all cells {FLAT_ELMOS:g} elmo)")
+    log(f"  new project: {width}x{height} flat sand (all cells {FLAT_ELMOS:g} elmo), surface={surf}")
     return Design(hm=hm, sym=sym, starts=starts, teams=teams, mexes=[], geos=[],
                   biome=b, title=title,
-                  description=f"{width}x{height} flat sand editor map.",
-                  diffuse=diffuse, water=water, template="editor", seed=seed,
-                  values=dict(width=width, height=height, biome=biome))
+                  description=f"{width}x{height} flat sand editor map ({surf} surface).",
+                  diffuse=diffuse, water=water, extra_files=extra_files,
+                  template="editor", seed=seed,
+                  values=dict(width=width, height=height, biome=biome, surface=surf))

@@ -33,52 +33,16 @@ from ..biomes import BIOMES
 from ..config import ForgeConfig
 from ..design import Design
 from ..procedural import place_resources
+from ..surfaces import SURFACES, VOID_GADGET, surface_extra_files
 from ..symmetry import Symmetry
 from ..templates.common import flatten_all
 from ..terrain import flatten_disc
 from .generator import DeepInfraGenerator, TEXTURE_NEGATIVE, TEXTURE_POSITIVE, _log_prompt
 from .postprocess import denoise, mirror_quadrant, selective_slope_clamp
 
-SURFACES = ("none", "water", "lava", "void")
-
 # Phase 3.5 preview export folder: grayscale heightmaps before/after the
 # denoise + selective slope-clamp pass, for human visual review.
 PREVIEW_DIR = Path(os.environ.get("AI_PREVIEW_DIR", "") or (Path.home() / "Documents" / "_ai_previews"))
-
-# Minimal synced gadget for "void" maps: destroys units that fall below the
-# void floor (the map has no water plane, so a unit can otherwise fall forever).
-VOID_GADGET = """-- void_death.lua: kills units that fall below the void floor (bottomless abyss maps).
-if (not gadgetHandler:IsSyncedCode()) then
-    return
-end
-
-local VOID_Y = -60.0   -- elmos below sea level; anything lower is destroyed
-local CHECK_EVERY = 15 -- frames between sweeps
-
-function gadget:GetInfo()
-    return {
-        name      = "Void Death",
-        desc      = "Destroys units that fall below the void floor.",
-        author    = "Atlas Map Forge",
-        date      = "2026",
-        license   = "GPL v2+",
-        layer     = 0,
-        enabled   = true,
-    }
-end
-
-function gadget:GameFrame(n)
-    if n % CHECK_EVERY ~= 0 then
-        return
-    end
-    for _, unitID in ipairs(Spring.GetAllUnits()) do
-        local _, y = Spring.GetUnitPosition(unitID)
-        if y and y < VOID_Y then
-            Spring.DestroyUnit(unitID, false, true)
-        end
-    end
-end
-"""
 
 
 def _heightmap_png(hm, path, lo, hi):
@@ -183,9 +147,7 @@ def design(prompt, size=(16, 4), seed=1, biome="temperate", log=print, model=Non
     hm = hm.astype(np.float32)
 
     surface = _surface(surface_type, waterlevel, BIOMES[biome])
-    extra_files = {}
-    if surface_type == "void":
-        extra_files["LuaRules/Gadgets/void_death.lua"] = VOID_GADGET
+    extra_files = surface_extra_files(surface_type)
 
     desc = (f"{ux}x{uz} AI-generated {biome} map ({prompt.strip()[:120]}), surface={surface_type}. "
             "1v1 to teams; terrain comes from a text prompt, not a symmetric template.")
@@ -289,9 +251,7 @@ def design_plateau(prompt, size=(16, 4), seed=1, biome="temperate", log=print, m
         log("  texture: solid biome fallback (--no-ai-texture)")
 
     surface = _surface(surface_type, waterlevel, BIOMES[biome])
-    extra_files = {}
-    if surface_type == "void":
-        extra_files["LuaRules/Gadgets/void_death.lua"] = VOID_GADGET
+    extra_files = surface_extra_files(surface_type)
 
     desc = (f"{ux}x{uz} twin-plateau {biome} map ({surface_type} surface). "
             "1v1 fortress map; terrain is exactly mirrored E-W and N-S.")

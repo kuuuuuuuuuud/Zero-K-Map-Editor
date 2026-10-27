@@ -1,5 +1,6 @@
 """Forge Editor blank template: custom even width/height flat sand map for manual terrain work."""
 from ..editor import flat_sand_design
+from ..surfaces import SURFACE_LABELS, surface_key
 from .base import Param, Template
 
 
@@ -21,11 +22,21 @@ class EditorTemplate(Template):
               help="Map height in Spring units (one unit is 512 elmos); even number between 4 and 32",
               info="Height of the map in Spring map units. Must be an even number between 4 and 32. "
                    "The default new-project size is 16 wide by 4 tall."),
+        Param("surface", "Surface Type", "choice", "None (Dry)", choices=SURFACE_LABELS, group="Map",
+              help="None (dry), Water, Lava (deadly orange plane), or Void (bottomless pit; a gadget "
+                   "kills units that fall off)",
+              info="What covers the map below sea level and how the mapinfo.lua water table is written. "
+                   "None (Dry) has no water plane. Water adds a standard blue, harmless water plane. "
+                   "Lava adds a glowing orange water plane that deals heavy damage to units in it. "
+                   "Void (Death Pit) has no water plane but packs a gadget that destroys any unit that "
+                   "falls below the map, so a bottomless pit kills without a visible water surface. "
+                   "All options are self-contained: the generated map needs no manual mapinfo.lua edits."),
     )
 
     def all_params(self):
-        # A blank editor map has no template-specific resources; only its dimensions.
+        # A blank editor map has no template-specific resources; only its dimensions and surface.
         return self.params
 
     def make(self, v, seed, log=print):
-        return flat_sand_design(v["width"], v["height"], seed=seed, title="New Map", log=log)
+        return flat_sand_design(v["width"], v["height"], seed=seed, title="New Map",
+                                surface=surface_key(v["surface"]), log=log)
