@@ -3,6 +3,8 @@ must report the actual height range in mapinfo.lua (numeric checks only - no ima
 import os
 import zipfile
 
+import pytest
+
 from atlasforge.app import server as S
 
 

@@ -36,6 +36,7 @@ def flat_sand_design(width, height, seed=1, title="New Map", biome="desert", log
     W, H = nx * SQ, nz * SQ
 
     hm = np.full((nz + 1, nx + 1), FLAT_ELMOS, dtype=np.float32)
+    assert hm.shape == (height * 64 + 1, width * 64 + 1), hm.shape  # e.g. 16x4 -> (257, 1025)
 
     # Diffuse texture is (Hpx, Wpx, 3) = (nz * TEX_PER_SQ, nx * TEX_PER_SQ, 3).
     tex = np.empty((nz * TEX_PER_SQ, nx * TEX_PER_SQ, 3), dtype=np.uint8)

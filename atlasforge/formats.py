@@ -76,6 +76,13 @@ def dds_bytes(rgb, fmt="DXT1"):
     return out + b"".join(levels)
 
 
+def dds_info(dds):
+    """(magic, height, width, mip_levels, fourcc) parsed from a DDS byte string."""
+    magic, _, _, h, w, _, _, mips = struct.unpack("<4sIIIIIII", dds[:32])
+    fourcc = struct.unpack("<4s", dds[84:88])[0]
+    return magic, h, w, mips, fourcc
+
+
 def tiles_from_strip(rgb):
     """Texture strip (Hs, W, 3), Hs and W multiples of 32 -> (ntiles, 680) SMT tile data with 4 mip levels."""
     Hs, W, _ = rgb.shape
@@ -112,6 +119,9 @@ def write_smf(path, nx, nz, hmin, hmax, hm16, typemap, minimap, metalmap, tilefi
               grass=None):
     """features: [(type name, x, y, z, rotation, size)]; grass: optional uint8 grid (nz/4, nx/4), > 0 = grass
     (stored as the MEH_Vegetation extra header the engine reads in CSMFMapFile::ReadGrassMap)."""
+    assert hmin < hmax, f"invalid height range {hmin:g}..{hmax:g} (flat maps need a tiny span)"
+    assert hm16.shape == (nz + 1, nx + 1), \
+        f"heightmap shape {hm16.shape} != expected {(nz + 1, nx + 1)}"
     feat_types = sorted(set(f[0] for f in features))
     ftype_idx = {t: k for k, t in enumerate(feat_types)}
     n_extra = 1 if grass is not None else 0

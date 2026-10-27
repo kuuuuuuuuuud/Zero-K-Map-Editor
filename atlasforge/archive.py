@@ -9,8 +9,8 @@ from PIL import Image, ImageDraw
 
 from . import SQ, TEX_PER_SQ, TILE
 from .config import ForgeConfig
-from .formats import (dds_bytes, lua_syntax_check, mapinfo_lua, metal_layout_lua, minimap_dxt, png_bytes, smt_header,
-                      startboxes_lua, tiles_from_strip, write_smf)
+from .formats import (dds_bytes, dds_info, lua_syntax_check, mapinfo_lua, metal_layout_lua, minimap_dxt, png_bytes,
+                      smt_header, startboxes_lua, tiles_from_strip, write_smf)
 from .features import grass_map, place_trees
 from .render import (PAINT_LAYERS, NoiseBank, build_texture_fields, crack_field, detail_bmp, material_files,
                      render_rgb)
@@ -98,7 +98,13 @@ def build_archive(name, hm, sym, starts, mexes, geos, biome, rng, outdir, desc, 
     hmin = float(hm.min())
     hmax = float(hm.max())
     if hmax <= hmin:
-        hmax = hmin + 1.0
+        # Perfectly flat heightmap: keep a tiny, non-zero span centred on the surface so the
+        # 16-bit height scale stays balanced (mid-range value) and mapinfo minheight/maxheight
+        # stay distinct after 1-decimal formatting. A zero span would make the SMF scale divide
+        # by zero and can cause rendering glitches in the engine.
+        flat = float(hmin)
+        hmin = flat - 0.1
+        hmax = flat + 0.1
     water_h = 0.0
     hm16 = np.clip(np.round((hm - hmin) / (hmax - hmin) * 65535), 0, 65535).astype(np.uint16)
     hmq = hm16.astype(np.float32) / 65535 * (hmax - hmin) + hmin          # continue with the quantised height
@@ -172,9 +178,15 @@ def build_archive(name, hm, sym, starts, mexes, geos, biome, rng, outdir, desc, 
     minimap = minimap_dxt(mini_img)
     assert len(minimap) == 699048
     mw, mh = _minimap_size(nx, nz)
+    assert mw & (mw - 1) == 0 and mh & (mh - 1) == 0, f"minimap must be power-of-two, got {mw}x{mh}"
     mini_ingame = np.asarray(Image.fromarray(mini_clean).resize((mw, mh), Image.LANCZOS))
     # Recoil flips DDS files vertically when loading (CBitmap::Load): write upside down.
     minimap_dds = dds_bytes(np.ascontiguousarray(mini_ingame[::-1]), "DXT1")
+    _magic, _mh, _mw, _mips, _fourcc = dds_info(minimap_dds)
+    assert _magic == b"DDS " and (_mw, _mh) == (mw, mh) and _fourcc == b"DXT1", \
+        f"minimap_ingame.dds header invalid: {_magic!r} {_mw}x{_mh} {_fourcc!r}"
+    assert _mips == max(mw, mh).bit_length(), f"minimap mip chain incomplete: {_mips} levels"
+    log(f"  minimap {mw}x{mh} DXT1 ({len(minimap_dds)} bytes, {_mips} mips)")
 
     feats = [("geovent", g[0], float(hmq[int(g[1] / SQ), int(g[0] / SQ)]), g[1], 0.0, 1.0) for g in geos]
     feats += [(f"treetype{t}", x, y, z, rot, 1.0) for (t, x, y, z, rot) in trees]
